@@ -25,18 +25,18 @@ pub fn export_sequence(
     output_dir: &Path,
     start_frame: Option<u32>,
     end_frame: Option<u32>,
+    cache: &mut ImageCache,
 ) -> Result<()> {
     let start = start_frame.unwrap_or(0);
     let total_frames = project.total_frames();
     let end = end_frame.unwrap_or(total_frames).min(total_frames);
 
-    let mut cache = ImageCache::new();
     let fps = project.fps as f32;
 
     for frame in start..end {
         let time_secs = frame as f32 / fps;
         let resolved = evaluate(project, time_secs);
-        let img = render_scene(&resolved, &mut cache, assets_dir)
+        let img = render_scene(&resolved, cache, assets_dir)
             .with_context(|| format!("failed to render frame {}", frame))?;
         export_frame(&img, output_dir, frame)?;
     }

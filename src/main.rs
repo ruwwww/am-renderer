@@ -47,6 +47,10 @@ enum Commands {
         /// Dump the compiled render/effect graph of evaluated frames.
         #[arg(long)]
         dump_graph: bool,
+
+        /// Auto-pair unmatched template media URIs to available source assets virtually.
+        #[arg(long)]
+        auto_pair: bool,
     },
     /// Print metadata information about the project.
     Info {
@@ -98,6 +102,7 @@ fn main() -> Result<()> {
             format,
             frame,
             dump_graph,
+            auto_pair,
         } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
@@ -117,13 +122,23 @@ fn main() -> Result<()> {
                 }
             };
 
+            let mut cache = am_renderer::render::compositor::ImageCache::new();
+            if auto_pair {
+                let mappings = build_virtual_mappings(&project, &assets)?;
+                println!("Auto-pairing virtually ({} mapping(s) created):", mappings.len());
+                for (uri, path) in &mappings {
+                    let filename = uri.rsplit("///").next().unwrap_or(uri).trim_start_matches('/');
+                    println!("  {} -> {}", filename, path.file_name().unwrap_or_default().to_string_lossy());
+                }
+                cache.set_virtual_mappings(mappings);
+            }
+
             if let Some(f) = frame {
                 let time_secs = f as f32 / project.fps;
                 let resolved = am_renderer::eval::timeline::evaluate(&project, time_secs);
                 if dump_graph {
                     print_render_graph(&resolved, f, time_secs);
                 }
-                let mut cache = am_renderer::render::compositor::ImageCache::new();
                 let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets)?;
 
                 let out_dir = if fmt == Format::Png {
@@ -141,7 +156,7 @@ fn main() -> Result<()> {
                 }
                 match fmt {
                     Format::Png => {
-                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache)?;
                         println!("Successfully rendered sequence to {}", output.display());
                     }
                     Format::Mp4 => {
@@ -153,7 +168,7 @@ fn main() -> Result<()> {
                         std::fs::create_dir_all(&temp_dir)?;
 
                         println!("Rendering frames...");
-                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache)?;
 
                         println!("Stitching video using FFmpeg...");
                         am_renderer::export::video::export_mp4(
@@ -789,4 +804,75 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
         effect_type,
         locally_applied,
     }
+}
+
+fn build_virtual_mappings(
+    project: &Project,
+    assets_dir: &std::path::Path,
+) -> Result<std::collections::HashMap<String, PathBuf>> {
+    use std::collections::HashMap;
+    let mut mappings = HashMap::new();
+
+    // 1. Gather all unique image URIs required
+    let mut required_image_uris = std::collections::HashSet::new();
+    for layer in &project.layers {
+        if layer.fill_type == FillType::Media {
+            if let Some(ref uri) = layer.fill_image {
+                required_image_uris.insert(uri.clone());
+            }
+        }
+    }
+    for m in &project.media {
+        let is_audio = m.mime_type.as_deref().map(|t| t.starts_with("audio/")).unwrap_or(false)
+            || m.uri.ends_with(".mp3")
+            || m.uri.ends_with(".wav")
+            || m.uri.ends_with(".m4a");
+        if !is_audio {
+            required_image_uris.insert(m.uri.clone());
+        }
+    }
+
+    if required_image_uris.is_empty() {
+        return Ok(mappings);
+    }
+
+    // 2. Scan assets directory for available physical image files
+    let mut available_images = Vec::new();
+    if assets_dir.exists() {
+        for entry in std::fs::read_dir(assets_dir)?.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    let ext_lower = ext.to_lowercase();
+                    if matches!(
+                        ext_lower.as_str(),
+                        "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif"
+                    ) {
+                        available_images.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    if available_images.is_empty() {
+        anyhow::bail!(
+            "No source images found in assets directory '{}' to perform auto-pairing.",
+            assets_dir.display()
+        );
+    }
+
+    // Sort physical images to make the mapping deterministic
+    available_images.sort();
+
+    // 3. Pair them using round-robin mapping
+    let mut sorted_uris: Vec<String> = required_image_uris.into_iter().collect();
+    sorted_uris.sort();
+
+    for (idx, uri) in sorted_uris.into_iter().enumerate() {
+        let physical_path = &available_images[idx % available_images.len()];
+        mappings.insert(uri, physical_path.clone());
+    }
+
+    Ok(mappings)
 }

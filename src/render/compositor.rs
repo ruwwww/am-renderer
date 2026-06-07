@@ -17,6 +17,7 @@ use log::{debug, warn};
 /// Cache for loaded source images to avoid re-reading from disk.
 pub struct ImageCache {
     images: HashMap<String, RgbaImage>,
+    virtual_mappings: HashMap<String, std::path::PathBuf>,
 }
 
 impl ImageCache {
@@ -24,7 +25,13 @@ impl ImageCache {
     pub fn new() -> Self {
         Self {
             images: HashMap::new(),
+            virtual_mappings: HashMap::new(),
         }
+    }
+
+    /// Set virtual mappings for media URIs to physical files.
+    pub fn set_virtual_mappings(&mut self, mappings: HashMap<String, std::path::PathBuf>) {
+        self.virtual_mappings = mappings;
     }
 
     /// Load an image by URI, returning a reference to the cached image.
@@ -33,7 +40,13 @@ impl ImageCache {
     /// Otherwise, resolves the URI to a file path within `assets_dir` and loads it.
     pub fn load(&mut self, uri: &str, assets_dir: &Path) -> Result<&RgbaImage> {
         if !self.images.contains_key(uri) {
-            let img = load_image_from_uri(uri, assets_dir)?;
+            let img = if let Some(physical_path) = self.virtual_mappings.get(uri) {
+                image::open(physical_path)
+                    .with_context(|| format!("Failed to open virtually paired image: {}", physical_path.display()))?
+                    .to_rgba8()
+            } else {
+                load_image_from_uri(uri, assets_dir)?
+            };
             self.images.insert(uri.to_string(), img);
         }
         Ok(self.images.get(uri).unwrap())
