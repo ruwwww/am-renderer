@@ -107,6 +107,8 @@ pub struct Layer {
     pub gradient: Option<Gradient>,
     /// Blend mode.
     pub blend_mode: BlendMode,
+    /// How the media fills the shape (e.g. "stretch", "fit", "fill").
+    pub media_fill_mode: Option<String>,
     /// Applied effects.
     pub effects: Vec<Effect>,
     /// Layer size [w, h] in pixels.
@@ -138,6 +140,8 @@ pub struct ResolvedLayer {
     pub gradient: Option<Gradient>,
     /// Blend mode.
     pub blend_mode: BlendMode,
+    /// How the media fills the shape (e.g. "stretch", "fit", "fill").
+    pub media_fill_mode: Option<String>,
     /// Effects (already evaluated params where applicable).
     pub effects: Vec<Effect>,
     /// Layer size [w, h] in pixels.

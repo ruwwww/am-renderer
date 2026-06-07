@@ -85,6 +85,7 @@ fn resolve_layer(layer: &Layer, t: f32) -> ResolvedLayer {
         fill_color: layer.fill_color,
         gradient: layer.gradient.clone(),
         blend_mode: layer.blend_mode,
+        media_fill_mode: layer.media_fill_mode.clone(),
         effects: layer.effects.clone(),
         size: layer.size,
     }

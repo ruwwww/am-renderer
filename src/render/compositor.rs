@@ -148,9 +148,40 @@ fn render_layer(
                 continue;
             }
 
-            // Map layer-local coords to source image coords
-            let sx = (lx / layer_w * src_w).min(src_w - 1.0).max(0.0) as u32;
-            let sy = (ly / layer_h * src_h).min(src_h - 1.0).max(0.0) as u32;
+            // Map layer-local coords to source image coords based on mediaFillMode
+            let (sx, sy) = match layer.media_fill_mode.as_deref() {
+                Some("fit") => {
+                    let scale = (layer_w / src_w).min(layer_h / src_h);
+                    let offset_x = (layer_w - src_w * scale) / 2.0;
+                    let offset_y = (layer_h - src_h * scale) / 2.0;
+                    let sx_f = (lx - offset_x) / scale;
+                    let sy_f = (ly - offset_y) / scale;
+                    if sx_f < 0.0 || sx_f >= src_w || sy_f < 0.0 || sy_f >= src_h {
+                        continue; // Letterbox/pillarbox space, leave transparent
+                    }
+                    (
+                        sx_f.min(src_w - 1.0).max(0.0) as u32,
+                        sy_f.min(src_h - 1.0).max(0.0) as u32,
+                    )
+                }
+                Some("fill") => {
+                    let scale = (layer_w / src_w).max(layer_h / src_h);
+                    let offset_x = (src_w * scale - layer_w) / 2.0;
+                    let offset_y = (src_h * scale - layer_h) / 2.0;
+                    let sx_f = (lx + offset_x) / scale;
+                    let sy_f = (ly + offset_y) / scale;
+                    (
+                        sx_f.min(src_w - 1.0).max(0.0) as u32,
+                        sy_f.min(src_h - 1.0).max(0.0) as u32,
+                    )
+                }
+                _ => {
+                    // Default to "stretch": stretch non-uniformly
+                    let sx = (lx / layer_w * src_w).min(src_w - 1.0).max(0.0) as u32;
+                    let sy = (ly / layer_h * src_h).min(src_h - 1.0).max(0.0) as u32;
+                    (sx, sy)
+                }
+            };
 
             let src_pixel = *source.get_pixel(sx, sy);
 

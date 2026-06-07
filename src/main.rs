@@ -432,6 +432,7 @@ fn convert_project(xml: &XmlScene) -> Result<Project> {
             fill_color,
             gradient,
             blend_mode,
+            media_fill_mode: shape.media_fill_mode.clone(),
             effects,
             size,
         });

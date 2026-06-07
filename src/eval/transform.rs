@@ -24,7 +24,7 @@ pub fn build_transform_matrix(
     location: [f32; 3],
     scale: [f32; 2],
     rotation_deg: f32,
-    canvas_center: [f32; 2],
+    _canvas_center: [f32; 2],
 ) -> [[f32; 3]; 3] {
     let angle = rotation_deg.to_radians();
     let cos_a = angle.cos();
@@ -32,9 +32,9 @@ pub fn build_transform_matrix(
     let sx = scale[0];
     let sy = scale[1];
 
-    // The layer position in canvas coordinates
-    let tx = canvas_center[0] + location[0];
-    let ty = canvas_center[1] + location[1];
+    // The layer position in canvas coordinates (absolute coordinates from XML)
+    let tx = location[0];
+    let ty = location[1];
 
     // Combined matrix: Translate * Rotate * Scale
     // Column-major: M[col][row]
