@@ -326,23 +326,35 @@ fn load_image_from_uri(uri: &str, assets_dir: &Path) -> Result<RgbaImage> {
         for entry in entries.flatten() {
             let entry_name = entry.file_name().to_string_lossy().to_string();
             let entry_lower = entry_name.to_lowercase();
+            let entry_path = entry.path();
 
-            // Case-insensitive exact match
+            // Case-insensitive exact match (including extension if present in URI)
             if entry_lower == filename_lower {
-                let img = image::open(entry.path())
+                let img = image::open(&entry_path)
                     .with_context(|| {
-                        format!("Failed to open image: {}", entry.path().display())
+                        format!("Failed to open image: {}", entry_path.display())
                     })?;
                 return Ok(img.to_rgba8());
+            }
+
+            // Case-insensitive exact stem match (e.g. "1000174558.jpg" matches "1000174558")
+            if let Some(entry_stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
+                if entry_stem.to_lowercase() == filename_lower {
+                    let img = image::open(&entry_path)
+                        .with_context(|| {
+                            format!("Failed to open image: {}", entry_path.display())
+                        })?;
+                    return Ok(img.to_rgba8());
+                }
             }
 
             // Hash prefix match (first 8 characters of the stem)
             if stem.len() >= 8 {
                 let prefix = &stem[..8];
                 if entry_lower.starts_with(prefix) {
-                    let img = image::open(entry.path())
+                    let img = image::open(&entry_path)
                         .with_context(|| {
-                            format!("Failed to open image: {}", entry.path().display())
+                            format!("Failed to open image: {}", entry_path.display())
                         })?;
                     return Ok(img.to_rgba8());
                 }
