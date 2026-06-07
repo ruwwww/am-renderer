@@ -34,6 +34,10 @@ pub struct Project {
 pub struct MediaRef {
     /// URI of the asset (e.g. `"am-internal:///HASH.PNG"`).
     pub uri: String,
+    /// Original filename.
+    pub filename: Option<String>,
+    /// Display title.
+    pub title: Option<String>,
     /// MIME type.
     pub mime_type: Option<String>,
     /// Width in pixels (for images / video).

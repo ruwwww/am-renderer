@@ -76,14 +76,7 @@ fn main() -> Result<()> {
             println!("Duration: {:.2}s", project.duration_secs());
             println!("FPS: {}", project.fps);
             println!("Total Frames: {}", project.total_frames());
-            println!("Media Assets: {}", project.media.len());
-            for m in &project.media {
-                println!(
-                    "  - URI: {} ({})",
-                    m.uri,
-                    m.mime_type.as_deref().unwrap_or("unknown")
-                );
-            }
+            print_distinct_media_inputs(&project);
             println!("Layers: {}", project.layers.len());
             for (idx, l) in project.layers.iter().enumerate() {
                 println!(
@@ -181,6 +174,64 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_distinct_media_inputs(project: &Project) {
+    use std::collections::HashSet;
+
+    let mut referenced_uris = HashSet::new();
+    for layer in &project.layers {
+        if layer.fill_type == FillType::Media {
+            if let Some(ref uri) = layer.fill_image {
+                referenced_uris.insert(uri.clone());
+            }
+        }
+    }
+    for track in &project.audio_tracks {
+        if let Some(ref uri) = track.src {
+            referenced_uris.insert(uri.clone());
+        }
+    }
+    for m in &project.media {
+        referenced_uris.insert(m.uri.clone());
+    }
+
+    if referenced_uris.is_empty() {
+        println!("Distinct Media Inputs Required: None");
+        return;
+    }
+
+    println!("Distinct Media Inputs Required ({}):", referenced_uris.len());
+    let mut sorted_uris: Vec<String> = referenced_uris.into_iter().collect();
+    sorted_uris.sort();
+
+    for uri in sorted_uris {
+        let metadata = project.media.iter().find(|m| m.uri == uri);
+        let label = metadata.and_then(|m| m.title.as_deref())
+            .or_else(|| metadata.and_then(|m| m.filename.as_deref()))
+            .unwrap_or_else(|| {
+                uri.rsplit('/')
+                    .next()
+                    .unwrap_or(&uri)
+            });
+
+        let mime = metadata.and_then(|m| m.mime_type.as_deref())
+            .unwrap_or_else(|| {
+                if uri.to_lowercase().ends_with(".mp3") || uri.to_lowercase().ends_with(".wav") {
+                    "audio/unknown"
+                } else {
+                    "image/unknown"
+                }
+            });
+
+        let dim_str = if let (Some(w), Some(h)) = (metadata.and_then(|m| m.width), metadata.and_then(|m| m.height)) {
+            format!(" [{}x{}]", w, h)
+        } else {
+            "".to_string()
+        };
+
+        println!("  - {} (URI: {}, type: {}{})", label, uri, mime, dim_str);
+    }
 }
 
 fn print_render_graph(scene: &am_renderer::eval::ResolvedScene, frame_num: u32, time_secs: f32) {
@@ -404,6 +455,8 @@ fn convert_project(xml: &XmlScene) -> Result<Project> {
 fn convert_media(xml: &XmlMedia) -> MediaRef {
     MediaRef {
         uri: xml.uri.clone(),
+        filename: xml.filename.clone(),
+        title: xml.title.clone(),
         mime_type: xml.r#type.clone(),
         width: xml.width.as_deref().and_then(|w| w.parse().ok()),
         height: xml.height.as_deref().and_then(|h| h.parse().ok()),
