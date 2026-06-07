@@ -1,0 +1,610 @@
+# Project Context: Alight Motion Headless Renderer
+
+## Goal
+
+Build a **headless renderer** capable of reproducing Alight Motion projects from exported XML without requiring a GUI.
+
+Primary objective:
+
+```text
+Alight Motion XML
+      ↓
+Internal Project Model
+      ↓
+Frame Evaluation
+      ↓
+Rendering
+      ↓
+PNG sequence / MP4 export
+```
+
+The focus is:
+
+```text
+Correctness > Performance
+```
+
+during early development.
+
+GPU acceleration is a later concern.
+
+---
+
+# Non-Goals (for now)
+
+Do NOT build:
+
+* Editor UI
+* Timeline editor
+* Property inspector
+* Interactive preview
+* Plugin marketplace
+* AI effects
+* Tracking
+* Segmentation
+* Advanced particles
+
+This project is currently:
+
+```text
+XML Interpreter + Renderer
+```
+
+not a video editor.
+
+---
+
+# Primary Use Case
+
+Most target projects are:
+
+```text
+Anime edits
+AMV edits
+Jedag-jedug edits
+Velocity edits
+```
+
+Typical effects:
+
+* Motion Blur
+* Blink
+* Oscillate / Swing (Ayun)
+* Scatter (Random Movement)
+* Tiles
+* Mirror
+* Scale Pulses
+* Rotation Shakes
+
+Most projects are:
+
+```text
+Transform-heavy
+```
+
+rather than shader-heavy.
+
+---
+
+# Core Architectural Principle
+
+The renderer must separate:
+
+```text
+Project Data
+Animation Evaluation
+Rendering
+```
+
+into independent systems.
+
+Desired pipeline:
+
+```text
+XML
+ ↓
+Project Model
+ ↓
+Animation Evaluation
+ ↓
+Resolved Scene
+ ↓
+Renderer
+ ↓
+Frame
+```
+
+Rendering must never directly inspect XML.
+
+---
+
+# Development Phases
+
+## Phase 1
+
+Project Parsing
+
+Goal:
+
+```text
+XML
+ ↓
+Rust structs
+```
+
+No rendering.
+
+No graphics.
+
+Success condition:
+
+```rust
+let project = parse_xml(path)?;
+```
+
+---
+
+## Phase 2
+
+Timeline Evaluation
+
+Goal:
+
+Given:
+
+```rust
+project.evaluate(time)
+```
+
+produce:
+
+```rust
+ResolvedScene
+```
+
+containing:
+
+```rust
+position
+scale
+rotation
+opacity
+effect parameters
+```
+
+No rendering.
+
+No GPU.
+
+Success condition:
+
+```rust
+scene = evaluate(3.42);
+```
+
+returns deterministic values.
+
+---
+
+## Phase 3
+
+Software Rendering
+
+Goal:
+
+Render PNG frames.
+
+CPU rendering is acceptable.
+
+Success condition:
+
+```text
+frame_0001.png
+frame_0002.png
+```
+
+generated correctly.
+
+---
+
+## Phase 4
+
+Video Export
+
+Integrate FFmpeg.
+
+Pipeline:
+
+```text
+Frames
+ ↓
+FFmpeg
+ ↓
+MP4
+```
+
+---
+
+## Phase 5
+
+GPU Acceleration
+
+Only after correctness is verified.
+
+Possible stack:
+
+```text
+Rust
+wgpu
+```
+
+---
+
+# Important Design Philosophy
+
+Everything should be evaluated at arbitrary timestamps.
+
+Core API:
+
+```rust
+evaluate(time_seconds)
+```
+
+Example:
+
+```rust
+let scene = project.evaluate(5.125);
+```
+
+This is the most important function in the entire engine.
+
+---
+
+# Internal Representation
+
+Never store stateful frame-to-frame animation.
+
+Always derive state from:
+
+```text
+Project
++
+Time
+=
+Scene
+```
+
+Meaning:
+
+```rust
+evaluate(10.0)
+```
+
+should always return the same result.
+
+No hidden state.
+
+---
+
+# Layer Model
+
+Each layer should resolve into:
+
+```rust
+struct ResolvedLayer {
+    transform: Mat3,
+    opacity: f32,
+    effects: Vec<ResolvedEffect>,
+}
+```
+
+Renderer only consumes resolved layers.
+
+---
+
+# Animation System
+
+Every animatable property should use the same abstraction.
+
+Example:
+
+```rust
+Animated<f32>
+Animated<Vec2>
+Animated<Color>
+```
+
+Each supports:
+
+```rust
+evaluate(time)
+```
+
+---
+
+# Keyframe Support
+
+Support:
+
+```text
+Linear
+Ease In
+Ease Out
+Ease In-Out
+Bezier (future)
+```
+
+Evaluation accuracy is more important than render speed.
+
+---
+
+# Effect Classification
+
+Effects should be classified by behavior.
+
+## Transform Modifiers
+
+Examples:
+
+```text
+Oscillate
+Swing (Ayun)
+Bounce
+Pulse
+Shake
+```
+
+Characteristics:
+
+```text
+Time-based parameter generators
+```
+
+Not shaders.
+
+---
+
+## Noise Modifiers
+
+Examples:
+
+```text
+Scatter
+Random Movement
+Wiggle
+```
+
+Characteristics:
+
+```text
+Noise(seed,time)
+```
+
+Must be deterministic.
+
+Given same:
+
+```text
+seed
+time
+```
+
+result must always match.
+
+---
+
+## UV Effects
+
+Examples:
+
+```text
+Tiles
+Mirror
+Repeat
+Flip
+```
+
+Characteristics:
+
+```text
+UV coordinate manipulation
+```
+
+Not color processing.
+
+---
+
+## Color Effects
+
+Examples:
+
+```text
+Exposure
+Gamma
+Brightness
+Contrast
+```
+
+Single-pass operations.
+
+---
+
+## Temporal Effects
+
+Examples:
+
+```text
+Motion Blur
+Echo
+Frame Trails
+```
+
+Depend on multiple timestamps.
+
+---
+
+# Motion Blur Requirements
+
+Target implementation:
+
+Temporal supersampling.
+
+Example:
+
+```rust
+evaluate(t - 0.2)
+evaluate(t - 0.1)
+evaluate(t)
+evaluate(t + 0.1)
+evaluate(t + 0.2)
+```
+
+Combine samples.
+
+This is preferred over optical flow.
+
+Reason:
+
+Most AM projects are transform-driven.
+
+---
+
+# Scatter Requirements
+
+Scatter should behave as:
+
+```rust
+position
++
+noise(seed,time)
+*
+magnitude
+```
+
+Must be deterministic.
+
+No frame-to-frame randomness.
+
+---
+
+# Swing / Oscillate Requirements
+
+Swing should be implemented as:
+
+```rust
+base_value
++
+oscillation(time)
+```
+
+Possible implementations:
+
+```text
+Sinusoidal
+Triangle Wave
+Ping-Pong
+```
+
+Architecture should support all variants.
+
+---
+
+# Tiles Requirements
+
+Tiles should be implemented as:
+
+```text
+UV repeat mode
+```
+
+Not image duplication.
+
+Support:
+
+```text
+Repeat
+Mirror Repeat
+Clamp
+```
+
+---
+
+# Rendering Philosophy
+
+The renderer should be stateless.
+
+Given:
+
+```rust
+render_frame(time)
+```
+
+it should:
+
+```text
+evaluate scene
+render scene
+return frame
+```
+
+No hidden caches required initially.
+
+---
+
+# Suggested Technology Stack
+
+Language:
+
+```text
+Rust
+```
+
+Libraries:
+
+```text
+serde
+quick-xml
+image
+ffmpeg-next
+```
+
+Later:
+
+```text
+wgpu
+```
+
+---
+
+# Success Criteria
+
+The project is successful if:
+
+```text
+Alight Motion XML
+      ↓
+Frame N
+```
+
+produces a visually correct frame.
+
+Even if:
+
+```text
+slow
+CPU-rendered
+non-realtime
+```
+
+Performance optimization comes later.
+
+Current priority:
+
+```text
+Correct timeline evaluation
+Correct transforms
+Correct effect behavior
+Deterministic rendering
+```
+
+This is the foundation for a future CapCut/Alight Motion-compatible rendering engine.

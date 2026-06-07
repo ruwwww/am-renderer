@@ -1,0 +1,1 @@
+//! Keyframe model types (stub).
