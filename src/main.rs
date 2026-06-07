@@ -43,6 +43,10 @@ enum Commands {
         /// Render a single frame instead of the full project.
         #[arg(long)]
         frame: Option<u32>,
+
+        /// Dump the compiled render/effect graph of evaluated frames.
+        #[arg(long)]
+        dump_graph: bool,
     },
     /// Print metadata information about the project.
     Info {
@@ -100,6 +104,7 @@ fn main() -> Result<()> {
             output,
             format,
             frame,
+            dump_graph,
         } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
@@ -122,6 +127,9 @@ fn main() -> Result<()> {
             if let Some(f) = frame {
                 let time_secs = f as f32 / project.fps;
                 let resolved = am_renderer::eval::timeline::evaluate(&project, time_secs);
+                if dump_graph {
+                    print_render_graph(&resolved, f, time_secs);
+                }
                 let mut cache = am_renderer::render::compositor::ImageCache::new();
                 let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets)?;
 
@@ -133,6 +141,11 @@ fn main() -> Result<()> {
                 am_renderer::export::png::export_frame(&img, &out_dir, f)?;
                 println!("Successfully rendered frame {} to {}", f, out_dir.display());
             } else {
+                if dump_graph {
+                    println!("Dumping graph for frame 0 (start of sequence):");
+                    let resolved = am_renderer::eval::timeline::evaluate(&project, 0.0);
+                    print_render_graph(&resolved, 0, 0.0);
+                }
                 match fmt {
                     Format::Png => {
                         am_renderer::export::png::export_sequence(&project, &assets, &output, None, None)?;
@@ -168,6 +181,46 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_render_graph(scene: &am_renderer::eval::ResolvedScene, frame_num: u32, time_secs: f32) {
+    println!("=== Render Graph for Frame {} (at {:.3}s) ===", frame_num, time_secs);
+    println!("Canvas size: {}x{}", scene.width, scene.height);
+    println!("Background color: {:?}", scene.bg_color);
+    println!("Layers (bottom-to-top):");
+    for (idx, layer) in scene.layers.iter().enumerate() {
+        println!(
+            "  [{}] Layer: {} (id={})",
+            idx,
+            layer.label.as_deref().unwrap_or("unnamed"),
+            layer.id
+        );
+        println!("      Size: {}x{}", layer.size[0], layer.size[1]);
+        println!("      Fill Type: {:?}", layer.fill_type);
+        if let Some(ref img) = layer.fill_image {
+            println!("      Fill Image URI: {}", img);
+        }
+        println!("      Position: {:?}", layer.location);
+        println!("      Scale: {:?}", layer.scale);
+        println!("      Rotation: {:.2}°", layer.rotation);
+        println!("      Opacity: {:.2}", layer.opacity);
+        println!("      Blend Mode: {:?}", layer.blend_mode);
+        if layer.effects.is_empty() {
+            println!("      Effects: None");
+        } else {
+            println!("      Effects Chain:");
+            for (e_idx, effect) in layer.effects.iter().enumerate() {
+                println!(
+                    "        - ({}.{}) {:?} (locally applied: {})",
+                    idx,
+                    e_idx,
+                    effect.effect_type,
+                    effect.locally_applied
+                );
+            }
+        }
+    }
+    println!("=============================================");
 }
 
 // ---------------------------------------------------------------------------
