@@ -7,25 +7,44 @@ use image::{RgbaImage, Rgba};
 
 /// Apply tile/mirror effect to an image.
 ///
-/// Creates a tiled version of the source image. If `mirror` is true,
-/// alternating tiles are flipped to create a seamless mirror pattern.
+/// Creates a tiled version of the source image. Implements the full Alight
+/// Motion Tiles effect: crop, scale, phase stagger (brick pattern),
+/// mirror-flip alternating tiles, and per-tile rotation.
+///
+/// # Algorithm
+///
+/// For each output pixel:
+/// 1. **Crop** 1% from each edge to prevent seam bleeding.
+/// 2. **Tile-space**: divide output into `scale×scale` tiles using
+///    fractional decomposition.
+/// 3. **Offset**: shift odd rows by `phase` (or odd columns if
+///    `vert_offset` is true) — creates brick/pinwheel patterns.
+/// 4. **Mirror**: horizontally flip odd columns, vertically flip odd rows.
+/// 5. **Rotate**: rotate local UV around each tile's centre by `angle`.
+/// 6. **Sample**: map the local UV back into the cropped source region.
 ///
 /// # Arguments
 /// * `img` - Source image
-/// * `tile_x` - Number of horizontal tiles (1.0 = no tiling)
-/// * `tile_y` - Number of vertical tiles (1.0 = no tiling)
+/// * `scale` - Number of tiles in each direction (1.0 = no tiling)
+/// * `phase` - Stagger offset for alternating rows/columns as fraction of tile
+/// * `vert_offset` - If true, stagger columns instead of rows
 /// * `mirror` - Whether to mirror alternating tiles
+/// * `angle` - Per-tile rotation in degrees
 ///
 /// # Returns
 /// New image with tiling applied (same dimensions as source).
-pub fn apply_tile(img: &RgbaImage, tile_x: f32, tile_y: f32, mirror: bool) -> RgbaImage {
+pub fn apply_tile(
+    img: &RgbaImage,
+    scale: f32,
+    phase: f32,
+    vert_offset: bool,
+    mirror: bool,
+    angle: f32,
+) -> RgbaImage {
     let w = img.width();
     let h = img.height();
 
-    if tile_x <= 0.0 || tile_y <= 0.0 {
-        return img.clone();
-    }
-    if (tile_x - 1.0).abs() < f32::EPSILON && (tile_y - 1.0).abs() < f32::EPSILON {
+    if scale <= 0.0 {
         return img.clone();
     }
 
@@ -33,39 +52,69 @@ pub fn apply_tile(img: &RgbaImage, tile_x: f32, tile_y: f32, mirror: bool) -> Rg
     let src_w = w as f32;
     let src_h = h as f32;
 
+    // Step 1: Crop 1% from each edge to prevent seam bleeding
+    let crop = 0.01f32;
+    let cx = src_w * crop;
+    let cy = src_h * crop;
+    let eff_w = (src_w - 2.0 * cx).max(1.0);
+    let eff_h = (src_h - 2.0 * cy).max(1.0);
+
+    // Precompute per-tile rotation
+    let angle_rad = angle.to_radians();
+    let cos_a = angle_rad.cos();
+    let sin_a = angle_rad.sin();
+    let has_rotation = angle.abs() > 0.001;
+
     for y in 0..h {
         for x in 0..w {
-            // Compute UV coordinates in tile space
-            let u = (x as f32 / src_w) * tile_x;
-            let v = (y as f32 / src_h) * tile_y;
+            // Step 2: Tile-space coordinates
+            let tx = (x as f32 / src_w) * scale;
+            let ty = (y as f32 / src_h) * scale;
 
-            // Compute which tile we're in and local position
-            let tile_ix = u.floor() as i32;
-            let tile_iy = v.floor() as i32;
-            let mut local_u = u.fract();
-            let mut local_v = v.fract();
+            let col = tx.floor() as i32;
+            let row = ty.floor() as i32;
+            let mut fx = tx.fract();
+            let mut fy = ty.fract();
 
-            // Handle negative fract
-            if local_u < 0.0 {
-                local_u += 1.0;
+            if fx < 0.0 {
+                fx += 1.0;
             }
-            if local_v < 0.0 {
-                local_v += 1.0;
+            if fy < 0.0 {
+                fy += 1.0;
             }
 
-            // Mirror alternating tiles
+            // Step 3: Offset (brick stagger) — shift alternate rows/columns
+            if phase != 0.0 {
+                if vert_offset {
+                    if col.rem_euclid(2) == 1 {
+                        fy = (fy + phase).rem_euclid(1.0);
+                    }
+                } else if row.rem_euclid(2) == 1 {
+                    fx = (fx + phase).rem_euclid(1.0);
+                }
+            }
+
+            // Step 4: Mirror alternating tiles
             if mirror {
-                if tile_ix % 2 != 0 {
-                    local_u = 1.0 - local_u;
+                if col.rem_euclid(2) == 1 {
+                    fx = 1.0 - fx;
                 }
-                if tile_iy % 2 != 0 {
-                    local_v = 1.0 - local_v;
+                if row.rem_euclid(2) == 1 {
+                    fy = 1.0 - fy;
                 }
             }
 
-            // Map back to source pixel coordinates
-            let sx = (local_u * src_w).min(src_w - 1.0).max(0.0) as u32;
-            let sy = (local_v * src_h).min(src_h - 1.0).max(0.0) as u32;
+            // Step 5: Per-tile rotation around tile centre
+            if has_rotation {
+                let rfx = fx - 0.5;
+                let rfy = fy - 0.5;
+                fx = (cos_a * rfx - sin_a * rfy + 0.5).rem_euclid(1.0);
+                fy = (sin_a * rfx + cos_a * rfy + 0.5).rem_euclid(1.0);
+            }
+
+            // Step 6: Map to source pixel with crop offset
+            let sx = ((cx + fx * eff_w).round() as u32).min(w - 1);
+            let sy = ((cy + fy * eff_h).round() as u32).min(h - 1);
 
             result.put_pixel(x, y, *img.get_pixel(sx, sy));
         }

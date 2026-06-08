@@ -513,6 +513,12 @@ fn create_layer_source(
                     &img, params.offset[0], params.offset[1],
                 );
             }
+            EffectType::Tile(params) => {
+                img = crate::render::effects::uv::apply_tile(
+                    &img, params.scale, params.phase, params.vert_offset,
+                    params.mirror, params.angle,
+                );
+            }
             _ => {}
         }
     }

@@ -749,7 +749,7 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
             mirror: get_prop_bool(props, "mirror", false),
             scale: get_prop_float(props, "scale", 1.0),
             phase: get_prop_float(props, "phase", 0.0),
-            vert_offset: get_prop_bool(props, "vert_offset", false),
+            vert_offset: get_prop_bool(props, "vertoffs", false),
             angle: get_prop_float(props, "angle", 0.0),
         }),
         "com.alightcreative.effects.exposure" => EffectType::Exposure(ExposureParams {
