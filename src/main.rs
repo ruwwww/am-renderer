@@ -763,7 +763,7 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
                 contrast: get_prop_float(props, "contrast", 0.0),
             })
         }
-        "com.alightcreative.effects.saturationvibrance" => {
+        "com.alightcreative.effects.saturationvibrance" | "com.alightcreative.effects.satvib" => {
             EffectType::SaturationVibrance(SaturationVibranceParams {
                 saturation: get_prop_float(props, "saturation", 0.0),
                 vibrance: get_prop_float(props, "vibrance", 0.0),
@@ -811,6 +811,22 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
         "com.alightcreative.effects.lumakey" => EffectType::LumaKey(LumaKeyParams {
             low_threshold: get_prop_animated_float(props, "low_threshold", 0.0),
             high_threshold: get_prop_animated_float(props, "high_threshold", 1.0),
+        }),
+        "com.alightcreative.effects.offset" => EffectType::Offset(OffsetParams {
+            offset: get_prop_vec2(props, "offset", [0.0, 0.0]),
+            feather: get_prop_float(props, "feather", 0.0),
+            mask: get_prop_bool(props, "mask", false),
+        }),
+        "com.alightcreative.effects.findedges" => EffectType::FindEdges(FindEdgesParams {
+            smoothing: get_prop_float(props, "smoothing", 1.0),
+            threshold: get_prop_float(props, "threshold", 1.0),
+            invert: get_prop_bool(props, "invert", true),
+        }),
+        "com.alightcreative.effects.stretchsegment" => EffectType::StretchSegment(StretchSegmentParams {
+            angle: get_prop_float(props, "angle", 0.0),
+            stretch: get_prop_float(props, "stretch", 0.0),
+            offset: get_prop_float(props, "offset", 0.0),
+            smooth: get_prop_float(props, "smooth", 0.0),
         }),
         other => EffectType::Unknown(other.to_string()),
     };

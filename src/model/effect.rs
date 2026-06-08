@@ -61,6 +61,14 @@ pub enum EffectType {
     /// Luminance-based alpha keying.
     LumaKey(LumaKeyParams),
 
+    // -- Distort / Transform --
+    /// Horizontal/vertical shift (offset).
+    Offset(OffsetParams),
+    /// Stylized edge outlines detection.
+    FindEdges(FindEdgesParams),
+    /// Segment stretching distortion.
+    StretchSegment(StretchSegmentParams),
+
     /// Unknown or unsupported effect — stores the raw effect ID from XML.
     Unknown(String),
 }
@@ -461,3 +469,70 @@ impl Default for LiftParams {
         Self { fill: 0.0 }
     }
 }
+
+/// Parameters for offset effect.
+#[derive(Debug, Clone)]
+pub struct OffsetParams {
+    /// Offset vector in pixels [dx, dy].
+    pub offset: [f32; 2],
+    /// Feathering amount.
+    pub feather: f32,
+    /// Whether to use as mask.
+    pub mask: bool,
+}
+
+impl Default for OffsetParams {
+    fn default() -> Self {
+        Self {
+            offset: [0.0, 0.0],
+            feather: 0.0,
+            mask: false,
+        }
+    }
+}
+
+/// Parameters for find edges effect.
+#[derive(Debug, Clone)]
+pub struct FindEdgesParams {
+    /// Smoothing amount.
+    pub smoothing: f32,
+    /// Threshold amount.
+    pub threshold: f32,
+    /// Whether to invert the edge detection output.
+    pub invert: bool,
+}
+
+impl Default for FindEdgesParams {
+    fn default() -> Self {
+        Self {
+            smoothing: 1.0,
+            threshold: 1.0,
+            invert: true,
+        }
+    }
+}
+
+/// Parameters for stretch segment effect.
+#[derive(Debug, Clone)]
+pub struct StretchSegmentParams {
+    /// Angle of stretch in degrees.
+    pub angle: f32,
+    /// Stretch amount.
+    pub stretch: f32,
+    /// Shift offset.
+    pub offset: f32,
+    /// Smoothing of boundaries.
+    pub smooth: f32,
+}
+
+impl Default for StretchSegmentParams {
+    fn default() -> Self {
+        Self {
+            angle: 0.0,
+            stretch: 0.0,
+            offset: 0.0,
+            smooth: 0.0,
+        }
+    }
+}
+

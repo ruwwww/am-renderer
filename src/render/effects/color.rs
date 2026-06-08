@@ -238,3 +238,91 @@ fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
     }
     p
 }
+
+/// Apply edge detection (Sobel filter) to an image.
+///
+/// # Arguments
+/// * `img` - Source image
+/// * `smoothing` - Blend/smooth factor
+/// * `threshold` - Edge threshold
+/// * `invert` - If true, returns dark edges on white, else white edges on black.
+pub fn find_edges(img: &RgbaImage, _smoothing: f32, threshold: f32, invert: bool) -> RgbaImage {
+    let w = img.width();
+    let h = img.height();
+    let mut result = img.clone();
+
+    if w < 3 || h < 3 {
+        return result;
+    }
+
+    // We compute grayscale values first for convenience
+    let mut gray = vec![0.0f32; (w * h) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let p = img.get_pixel(x, y);
+            gray[(y * w + x) as usize] = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
+        }
+    }
+
+    for y in 1..(h - 1) {
+        for x in 1..(w - 1) {
+            let mut gx = 0.0;
+            let mut gy = 0.0;
+
+            // Apply Sobel kernels
+            for ky in 0..3 {
+                for kx in 0..3 {
+                    let px = (x as i32 + kx as i32 - 1) as u32;
+                    let py = (y as i32 + ky as i32 - 1) as u32;
+                    let val = gray[(py * w + px) as usize];
+
+                    // gx kernel:
+                    // [-1  0  1]
+                    // [-2  0  2]
+                    // [-1  0  1]
+                    let k_gx = match (kx, ky) {
+                        (0, 0) | (0, 2) => -1.0,
+                        (0, 1) => -2.0,
+                        (2, 0) | (2, 2) => 1.0,
+                        (2, 1) => 2.0,
+                        _ => 0.0,
+                    };
+                    gx += val * k_gx;
+
+                    // gy kernel:
+                    // [-1 -2 -1]
+                    // [ 0  0  0]
+                    // [ 1  2  1]
+                    let k_gy = match (kx, ky) {
+                        (0, 0) | (2, 0) => -1.0,
+                        (1, 0) => -2.0,
+                        (0, 2) | (2, 2) => 1.0,
+                        (1, 2) => 2.0,
+                        _ => 0.0,
+                    };
+                    gy += val * k_gy;
+                }
+            }
+
+            let magnitude = (gx * gx + gy * gy).sqrt();
+            let edge_val = if magnitude < threshold * 10.0 {
+                0.0
+            } else {
+                magnitude.min(255.0)
+            };
+
+            let final_val = if invert {
+                255 - edge_val.round() as u8
+            } else {
+                edge_val.round() as u8
+            };
+
+            let pixel = result.get_pixel_mut(x, y);
+            pixel[0] = final_val;
+            pixel[1] = final_val;
+            pixel[2] = final_val;
+        }
+    }
+
+    result
+}

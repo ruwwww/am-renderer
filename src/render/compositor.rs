@@ -498,6 +498,21 @@ fn create_layer_source(
                 let color = [params.tint[0], params.tint[1], params.tint[2], 1.0];
                 img = crate::render::effects::color::apply_color_fill(&img, color, 1.0);
             }
+            EffectType::FindEdges(params) => {
+                img = crate::render::effects::color::find_edges(
+                    &img, params.smoothing, params.threshold, params.invert,
+                );
+            }
+            EffectType::StretchSegment(params) => {
+                img = crate::render::effects::uv::apply_stretch_segment(
+                    &img, params.angle, params.stretch, params.offset, params.smooth,
+                );
+            }
+            EffectType::Offset(params) => {
+                img = crate::render::effects::uv::apply_offset(
+                    &img, params.offset[0], params.offset[1],
+                );
+            }
             _ => {}
         }
     }
