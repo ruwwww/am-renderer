@@ -193,15 +193,30 @@ pub fn apply_offset(img: &RgbaImage, dx: f32, dy: f32) -> RgbaImage {
     let h = img.height();
     let mut result = RgbaImage::new(w, h);
 
-    let dx_i = dx.round() as i32;
-    let dy_i = dy.round() as i32;
+    let w_i32 = w as i32;
+    let h_i32 = h as i32;
+    let dx_wrapped = ((dx.round() as i32) % w_i32 + w_i32) % w_i32;
+    let dy_wrapped = ((dy.round() as i32) % h_i32 + h_i32) % h_i32;
+    let dx_w = dx_wrapped as u32;
+    let dy_h = dy_wrapped as u32;
+
+    let src_raw = img.as_raw();
+    let dst_raw = result.as_mut();
+    let w4 = w as usize * 4;
 
     for y in 0..h {
+        let sy = if y >= dy_h { y - dy_h } else { y + (h - dy_h) };
+        let sy_off = sy as usize * w4;
+        let dy_off = y as usize * w4;
+
         for x in 0..w {
-            // Wrap source coords
-            let sx = ((x as i32 - dx_i).rem_euclid(w as i32)) as u32;
-            let sy = ((y as i32 - dy_i).rem_euclid(h as i32)) as u32;
-            result.put_pixel(x, y, *img.get_pixel(sx, sy));
+            let sx = if x >= dx_w { x - dx_w } else { x + (w - dx_w) };
+            let src_idx = sy_off + sx as usize * 4;
+            let dst_idx = dy_off + x as usize * 4;
+            dst_raw[dst_idx] = src_raw[src_idx];
+            dst_raw[dst_idx + 1] = src_raw[src_idx + 1];
+            dst_raw[dst_idx + 2] = src_raw[src_idx + 2];
+            dst_raw[dst_idx + 3] = src_raw[src_idx + 3];
         }
     }
 
@@ -229,40 +244,47 @@ pub fn apply_stretch_segment(img: &RgbaImage, angle: f32, stretch: f32, offset: 
     let h = img.height();
     let mut result = RgbaImage::new(w, h);
 
-    let cx = w as f32 / 2.0 + offset * angle.to_radians().sin();
-    let cy = h as f32 / 2.0 + offset * angle.to_radians().cos();
+    let angle_rad = angle.to_radians();
+    let cx = w as f32 / 2.0 + offset * angle_rad.sin();
+    let cy = h as f32 / 2.0 + offset * angle_rad.cos();
     let half_stretch = stretch / 2.0;
-    let cos_a = angle.to_radians().cos();
-    let sin_a = angle.to_radians().sin();
+    let cos_a = angle_rad.cos();
+    let sin_a = angle_rad.sin();
+    let w_m1 = w as f32 - 1.0;
+    let h_m1 = h as f32 - 1.0;
+
+    let src_raw = img.as_raw();
+    let dst_raw = result.as_mut();
 
     for y in 0..h {
         for x in 0..w {
             let dx = x as f32 - cx;
             let dy = y as f32 - cy;
-            // Projection along the stretch direction (perpendicular to cut)
             let proj = dx * sin_a - dy * cos_a;
 
             let (sx, sy) = if proj > half_stretch {
-                // Upper half: shift back
                 let src_x = x as f32 - sin_a * half_stretch;
                 let src_y = y as f32 + cos_a * half_stretch;
-                (src_x.round().clamp(0.0, w as f32 - 1.0) as u32,
-                 src_y.round().clamp(0.0, h as f32 - 1.0) as u32)
+                (src_x.round().clamp(0.0, w_m1) as u32,
+                 src_y.round().clamp(0.0, h_m1) as u32)
             } else if proj < -half_stretch {
-                // Lower half: shift forward
                 let src_x = x as f32 + sin_a * half_stretch;
                 let src_y = y as f32 - cos_a * half_stretch;
-                (src_x.round().clamp(0.0, w as f32 - 1.0) as u32,
-                 src_y.round().clamp(0.0, h as f32 - 1.0) as u32)
+                (src_x.round().clamp(0.0, w_m1) as u32,
+                 src_y.round().clamp(0.0, h_m1) as u32)
             } else {
-                // Gap: sample from nearest boundary pixel
                 let t = proj.clamp(-half_stretch, half_stretch);
-                let src_x = (cx + t * sin_a).round().clamp(0.0, w as f32 - 1.0) as u32;
-                let src_y = (cy - t * cos_a).round().clamp(0.0, h as f32 - 1.0) as u32;
+                let src_x = (cx + t * sin_a).round().clamp(0.0, w_m1) as u32;
+                let src_y = (cy - t * cos_a).round().clamp(0.0, h_m1) as u32;
                 (src_x, src_y)
             };
 
-            result.put_pixel(x, y, *img.get_pixel(sx, sy));
+            let src_idx = (sy * w + sx) as usize * 4;
+            let dst_idx = (y * w + x) as usize * 4;
+            dst_raw[dst_idx] = src_raw[src_idx];
+            dst_raw[dst_idx + 1] = src_raw[src_idx + 1];
+            dst_raw[dst_idx + 2] = src_raw[src_idx + 2];
+            dst_raw[dst_idx + 3] = src_raw[src_idx + 3];
         }
     }
 
