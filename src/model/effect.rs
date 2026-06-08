@@ -54,8 +54,8 @@ pub enum EffectType {
     LensBlur(LensBlurParams),
     /// Linear/radial gradient overlay.
     GradientOverlay(GradientOverlayParams),
-    /// Lift adjustment (shadows color shift). No parameters.
-    Lift,
+    /// Lift adjustment (shadows color shift / copy background).
+    Lift(LiftParams),
 
     // -- Keying --
     /// Luminance-based alpha keying.
@@ -446,5 +446,18 @@ impl Default for LumaKeyParams {
             low_threshold: Animated::Static(0.0),
             high_threshold: Animated::Static(1.0),
         }
+    }
+}
+
+/// Parameters for lift adjustment / copy background.
+#[derive(Debug, Clone)]
+pub struct LiftParams {
+    /// Blend amount (0.0 = 100% background, 1.0 = 100% shape color).
+    pub fill: f32,
+}
+
+impl Default for LiftParams {
+    fn default() -> Self {
+        Self { fill: 0.0 }
     }
 }

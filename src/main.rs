@@ -785,7 +785,7 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
             strength: get_prop_float(props, "strength", 0.5),
         }),
         "com.alightcreative.effects.gaussianblur" => EffectType::GaussianBlur(GaussianBlurParams {
-            radius: get_prop_float(props, "radius", 5.0),
+            radius: get_prop_float(props, "radius", get_prop_float(props, "strength", 0.05) * 100.0),
         }),
         "com.alightcreative.effects.lensblur" => EffectType::LensBlur(LensBlurParams {
             radius: get_prop_float(props, "radius", 5.0),
@@ -800,7 +800,9 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
                 scale: get_prop_float(props, "scale", 1.0),
             })
         }
-        "com.alightcreative.effects.lift" => EffectType::Lift,
+        "com.alightcreative.effects.lift" => EffectType::Lift(LiftParams {
+            fill: get_prop_float(props, "fill", 0.0),
+        }),
         "com.alightcreative.effects.lumakey" => EffectType::LumaKey(LumaKeyParams {
             low_threshold: get_prop_animated_float(props, "low_threshold", 0.0),
             high_threshold: get_prop_animated_float(props, "high_threshold", 1.0),

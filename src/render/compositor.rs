@@ -177,7 +177,7 @@ fn render_layer(
     };
 
     // Get the source image/buffer for this layer
-    let source = create_layer_source(layer, image_cache, assets_dir)?;
+    let source = create_layer_source(layer, image_cache, assets_dir, canvas, &fwd)?;
     let src_w = source.width() as f32;
     let src_h = source.height() as f32;
 
@@ -285,22 +285,20 @@ fn render_layer(
     Ok(())
 }
 
-/// Create the source image buffer for a layer based on its fill type.
-fn create_layer_source(
+/// Create the base shape image source without any lift (background copy) effect.
+fn create_base_shape_source(
     layer: &ResolvedLayer,
+    w: u32,
+    h: u32,
     image_cache: &mut ImageCache,
     assets_dir: &Path,
 ) -> Result<RgbaImage> {
-    let w = layer.size[0].max(1.0) as u32;
-    let h = layer.size[1].max(1.0) as u32;
-
-    let mut img = match layer.fill_type {
+    let img = match layer.fill_type {
         FillType::Media => {
             if let Some(ref uri) = layer.fill_image {
                 let source = image_cache.load(uri, assets_dir)?;
                 source.clone()
             } else {
-                // No media URI — create a transparent placeholder
                 warn!("Media layer '{}' has no fill image URI", layer.label.as_deref().unwrap_or("unnamed"));
                 RgbaImage::new(w, h)
             }
@@ -317,7 +315,6 @@ fn create_layer_source(
             if let Some(ref gradient) = layer.gradient {
                 render_gradient(w, h, gradient)
             } else {
-                // Fallback to fill color
                 let color = to_rgba_u8(layer.fill_color);
                 let mut img = RgbaImage::new(w, h);
                 for pixel in img.pixels_mut() {
@@ -329,6 +326,75 @@ fn create_layer_source(
         FillType::None => {
             RgbaImage::new(w, h)
         }
+    };
+    Ok(img)
+}
+
+/// Create the source image buffer for a layer based on its fill type.
+fn create_layer_source(
+    layer: &ResolvedLayer,
+    image_cache: &mut ImageCache,
+    assets_dir: &Path,
+    canvas: &RgbaImage,
+    fwd: &[[f32; 3]; 3],
+) -> Result<RgbaImage> {
+    let w = layer.size[0].max(1.0) as u32;
+    let h = layer.size[1].max(1.0) as u32;
+
+    // Check if the layer has a Lift (Copy Background) effect
+    let mut lift_effect = None;
+    for effect in &layer.effects {
+        if let EffectType::Lift(ref params) = effect.effect_type {
+            lift_effect = Some(params);
+            break;
+        }
+    }
+
+    let mut img = if let Some(lift_params) = lift_effect {
+        let mut bg_img = RgbaImage::new(w, h);
+        let half_w = layer.size[0] / 2.0;
+        let half_h = layer.size[1] / 2.0;
+
+        let shape_img = if lift_params.fill > 0.0 {
+            Some(create_base_shape_source(layer, w, h, image_cache, assets_dir)?)
+        } else {
+            None
+        };
+
+        for ly in 0..h {
+            for lx in 0..w {
+                // Map layer-local pixel coordinate to canvas space
+                let local_x = lx as f32 - half_w + 0.5;
+                let local_y = ly as f32 - half_h + 0.5;
+
+                let canvas_pt = transform_point(fwd, [local_x, local_y]);
+                let cx = canvas_pt[0].round() as i32;
+                let cy = canvas_pt[1].round() as i32;
+
+                let bg_pixel = if cx >= 0 && cx < canvas.width() as i32 && cy >= 0 && cy < canvas.height() as i32 {
+                    *canvas.get_pixel(cx as u32, cy as u32)
+                } else {
+                    Rgba([0, 0, 0, 0])
+                };
+
+                let final_pixel = if let Some(ref s_img) = shape_img {
+                    let shape_pixel = *s_img.get_pixel(lx, ly);
+                    let f = lift_params.fill.clamp(0.0, 1.0);
+                    let r = (bg_pixel[0] as f32 * (1.0 - f) + shape_pixel[0] as f32 * f).round().clamp(0.0, 255.0) as u8;
+                    let g = (bg_pixel[1] as f32 * (1.0 - f) + shape_pixel[1] as f32 * f).round().clamp(0.0, 255.0) as u8;
+                    let b = (bg_pixel[2] as f32 * (1.0 - f) + shape_pixel[2] as f32 * f).round().clamp(0.0, 255.0) as u8;
+                    let a = (bg_pixel[3] as f32 * (1.0 - f) + shape_pixel[3] as f32 * f).round().clamp(0.0, 255.0) as u8;
+                    Rgba([r, g, b, a])
+                } else {
+                    bg_pixel
+                };
+
+                bg_img.put_pixel(lx, ly, final_pixel);
+            }
+        }
+        bg_img
+    } else {
+        create_base_shape_source(layer, w, h, image_cache, assets_dir)?
     };
 
     // Apply pixel-space effects
