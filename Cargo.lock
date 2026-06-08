@@ -46,6 +46,7 @@ dependencies = [
  "image",
  "log",
  "quick-xml",
+ "rayon",
  "serde",
  "thiserror",
 ]

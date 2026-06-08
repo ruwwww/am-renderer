@@ -2,6 +2,12 @@
 //!
 //! Uses inverse-transform sampling: for each canvas pixel, compute where it
 //! maps in the source layer, sample the source, then blend onto the canvas.
+//!
+//! Performance notes:
+//!  - Per-row parallelism via rayon (all CPU cores)
+//!  - Lift (Copy Background) uses affine stepping — no per-pixel matrix multiply
+//!  - blend_pixel uses integer fixed-point arithmetic
+//!  - Effect LUTs precomputed once per layer
 
 use crate::eval::timeline::ResolvedScene;
 use crate::eval::transform::{build_transform_matrix, invert_transform, transform_point};
@@ -13,11 +19,12 @@ use anyhow::{Context, Result, bail};
 use std::path::Path;
 use std::collections::HashMap;
 use log::{debug, warn};
+use rayon::prelude::*;
 
 /// Cache for loaded source images to avoid re-reading from disk.
 pub struct ImageCache {
     images: HashMap<String, RgbaImage>,
-    virtual_mappings: HashMap<String, std::path::PathBuf>,
+    pub virtual_mappings: HashMap<String, std::path::PathBuf>,
 }
 
 impl ImageCache {
@@ -29,9 +36,22 @@ impl ImageCache {
         }
     }
 
+    /// Create a new cache pre-populated with virtual mappings.
+    pub fn new_with_mappings(mappings: HashMap<String, std::path::PathBuf>) -> Self {
+        Self {
+            images: HashMap::new(),
+            virtual_mappings: mappings,
+        }
+    }
+
     /// Set virtual mappings for media URIs to physical files.
     pub fn set_virtual_mappings(&mut self, mappings: HashMap<String, std::path::PathBuf>) {
         self.virtual_mappings = mappings;
+    }
+
+    /// Clone just the virtual mappings (cheap — no image data).
+    pub fn virtual_mappings_clone(&self) -> HashMap<String, std::path::PathBuf> {
+        self.virtual_mappings.clone()
     }
 
     /// Load an image by URI, returning a reference to the cached image.
@@ -52,6 +72,7 @@ impl ImageCache {
         Ok(self.images.get(uri).unwrap())
     }
 }
+
 
 /// Render a resolved scene to an RGBA image.
 ///
@@ -114,7 +135,8 @@ pub fn render_scene(
     // Composite layers bottom to top
     for layer in &scene.layers {
         if let Err(e) = render_layer(&mut canvas, layer, image_cache, assets_dir, debug_layout) {
-            warn!("Failed to render layer '{}' (id={}): {}", layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
+            warn!("Failed to render layer '{}' (id={}): {}",
+                  layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
         }
     }
 
@@ -185,68 +207,96 @@ fn render_layer(
     let half_w = layer_w / 2.0;
     let half_h = layer_h / 2.0;
 
-    // For each canvas pixel, inverse-transform to find the source coordinate
-    for cy in 0..canvas.height() {
-        for cx in 0..canvas.width() {
-            let canvas_pt = [cx as f32 + 0.5, cy as f32 + 0.5];
+    // --- Precompute per-fill-mode mapping constants (done once, outside loop) ---
+    let fill_scale = match layer.media_fill_mode.as_deref() {
+        Some("fit")  => (layer_w / src_w).min(layer_h / src_h),
+        Some("fill") => (layer_w / src_w).max(layer_h / src_h),
+        _            => 1.0,
+    };
+    let (fill_off_x, fill_off_y) = match layer.media_fill_mode.as_deref() {
+        Some("fit")  => ((layer_w - src_w * fill_scale) / 2.0, (layer_h - src_h * fill_scale) / 2.0),
+        Some("fill") => (-((src_w * fill_scale - layer_w) / 2.0), -((src_h * fill_scale - layer_h) / 2.0)),
+        _            => (0.0, 0.0),
+    };
+    let media_fill_mode = layer.media_fill_mode.as_deref().unwrap_or("");
 
-            // Map canvas pixel to layer-local coordinates
-            let local = transform_point(&inv, canvas_pt);
+    // --- Precompute affine stepping vectors for the inverse transform ---
+    // For each canvas row y: local = inv * (0.5 + x, 0.5 + y)
+    // We use the affine decomposition: stepping one pixel in X adds a constant delta.
+    let inv = &inv;
+    let step_x = [inv[0][0], inv[1][0]]; // delta per +1 in canvas-x
+    let step_y = [inv[0][1], inv[1][1]]; // delta per +1 in canvas-y
+    let origin = transform_point(inv, [0.5_f32, 0.5_f32]); // local at (0,0) canvas
 
-            // Layer-local coords: origin at layer center, so offset to [0, layer_size]
-            let lx = local[0] + half_w;
-            let ly = local[1] + half_h;
+    // For each row, precompute the starting local coords then walk columns with step_x.
+    // This replaces the per-pixel matrix multiply with 2 FMAs.
 
-            // Check if we're inside the layer bounds
-            if lx < 0.0 || lx >= layer_w || ly < 0.0 || ly >= layer_h {
-                continue;
-            }
+    let canvas_w_u = canvas.width();
+    let canvas_h_u = canvas.height();
+    let layer_blend_mode = layer.blend_mode;
+    let layer_opacity = layer.opacity;
 
-            // Map layer-local coords to source image coords based on mediaFillMode
-            let (sx, sy) = match layer.media_fill_mode.as_deref() {
-                Some("fit") => {
-                    let scale = (layer_w / src_w).min(layer_h / src_h);
-                    let offset_x = (layer_w - src_w * scale) / 2.0;
-                    let offset_y = (layer_h - src_h * scale) / 2.0;
-                    let sx_f = (lx - offset_x) / scale;
-                    let sy_f = (ly - offset_y) / scale;
-                    if sx_f < 0.0 || sx_f >= src_w || sy_f < 0.0 || sy_f >= src_h {
-                        continue; // Letterbox/pillarbox space, leave transparent
+    // Collect rows in parallel; each row produces a Vec of (x, pixel) patches
+    let row_patches: Vec<Vec<(u32, Rgba<u8>)>> = (0..canvas_h_u)
+        .into_par_iter()
+        .map(|cy| {
+            let mut patches = Vec::new();
+            // Starting local coord for this row at cx=0
+            let row_lx0 = origin[0] + step_y[0] * cy as f32;
+            let row_ly0 = origin[1] + step_y[1] * cy as f32;
+
+            for cx in 0..canvas_w_u {
+                let lx_raw = row_lx0 + step_x[0] * cx as f32 + half_w;
+                let ly_raw = row_ly0 + step_x[1] * cx as f32 + half_h;
+
+                if lx_raw < 0.0 || lx_raw >= layer_w || ly_raw < 0.0 || ly_raw >= layer_h {
+                    continue;
+                }
+
+                let (sx, sy) = match media_fill_mode {
+                    "fit" => {
+                        let sx_f = (lx_raw - fill_off_x) / fill_scale;
+                        let sy_f = (ly_raw - fill_off_y) / fill_scale;
+                        if sx_f < 0.0 || sx_f >= src_w || sy_f < 0.0 || sy_f >= src_h {
+                            continue;
+                        }
+                        (sx_f as u32, sy_f as u32)
                     }
-                    (
-                        sx_f.min(src_w - 1.0).max(0.0) as u32,
-                        sy_f.min(src_h - 1.0).max(0.0) as u32,
-                    )
-                }
-                Some("fill") => {
-                    let scale = (layer_w / src_w).max(layer_h / src_h);
-                    let offset_x = (src_w * scale - layer_w) / 2.0;
-                    let offset_y = (src_h * scale - layer_h) / 2.0;
-                    let sx_f = (lx + offset_x) / scale;
-                    let sy_f = (ly + offset_y) / scale;
-                    (
-                        sx_f.min(src_w - 1.0).max(0.0) as u32,
-                        sy_f.min(src_h - 1.0).max(0.0) as u32,
-                    )
-                }
-                _ => {
-                    // Default to "stretch": stretch non-uniformly
-                    let sx = (lx / layer_w * src_w).min(src_w - 1.0).max(0.0) as u32;
-                    let sy = (ly / layer_h * src_h).min(src_h - 1.0).max(0.0) as u32;
-                    (sx, sy)
-                }
-            };
+                    "fill" => {
+                        let sx_f = (lx_raw - fill_off_x) / fill_scale;
+                        let sy_f = (ly_raw - fill_off_y) / fill_scale;
+                        (
+                            (sx_f as u32).min(source.width() - 1),
+                            (sy_f as u32).min(source.height() - 1),
+                        )
+                    }
+                    _ => {
+                        let sx = (lx_raw / layer_w * src_w) as u32;
+                        let sy = (ly_raw / layer_h * src_h) as u32;
+                        (
+                            sx.min(source.width() - 1),
+                            sy.min(source.height() - 1),
+                        )
+                    }
+                };
 
-            let src_pixel = *source.get_pixel(sx, sy);
+                let src_pixel = *source.get_pixel(sx, sy);
+                if src_pixel[3] == 0 {
+                    continue;
+                }
 
-            // Skip fully transparent source pixels
-            if src_pixel[3] == 0 {
-                continue;
+                let dst_pixel = *canvas.get_pixel(cx, cy);
+                let blended = blend_pixel(dst_pixel, src_pixel, layer_blend_mode, layer_opacity);
+                patches.push((cx, blended));
             }
+            patches
+        })
+        .collect();
 
-            let dst_pixel = *canvas.get_pixel(cx, cy);
-            let blended = blend_pixel(dst_pixel, src_pixel, layer.blend_mode, layer.opacity);
-            canvas.put_pixel(cx, cy, blended);
+    // Apply patches back to canvas (sequential, no data races)
+    for (cy, patches) in row_patches.into_iter().enumerate() {
+        for (cx, pixel) in patches {
+            canvas.put_pixel(cx, cy as u32, pixel);
         }
     }
 
@@ -365,6 +415,8 @@ fn create_layer_source(
         let mut bg_img = RgbaImage::new(w, h);
         let half_w = layer.size[0] / 2.0;
         let half_h = layer.size[1] / 2.0;
+        let cw = canvas.width() as i32;
+        let ch = canvas.height() as i32;
 
         let shape_img = if lift_params.fill > 0.0 {
             Some(create_base_shape_source(layer, w, h, image_cache, assets_dir)?)
@@ -372,35 +424,70 @@ fn create_layer_source(
             None
         };
 
+        // Precompute affine stepping vectors for fwd transform.
+        // For a pixel (lx, ly) in layer-local space:
+        //   local_x = (lx + 0.5) / w * size_w - half_w
+        //   local_y = (ly + 0.5) / h * size_h - half_h
+        // canvas_pt = fwd * [local_x, local_y]
+        // Expanding: as lx increases by 1, local_x increases by size_w/w.
+        // So canvas_pt advances by fwd * [size_w/w, 0] — constant per row.
+        let dx_per_px = layer.size[0] / w as f32; // how much local_x changes per lx+1
+        let dy_per_py = layer.size[1] / h as f32; // how much local_y changes per ly+1
+
+        // fwd row stepping vector (advancing lx by 1)
+        let fwd_step_x = [fwd[0][0] * dx_per_px, fwd[1][0] * dx_per_px];
+        // fwd column stepping vector (advancing ly by 1)
+        let fwd_step_y = [fwd[0][1] * dy_per_py, fwd[1][1] * dy_per_py];
+
+        // Compute canvas origin for ly=0, lx=0
+        let local_x0 = 0.5 / w as f32 * layer.size[0] - half_w;
+        let local_y0 = 0.5 / h as f32 * layer.size[1] - half_h;
+        let canvas_origin = [
+            fwd[0][0] * local_x0 + fwd[0][1] * local_y0 + fwd[0][2],
+            fwd[1][0] * local_x0 + fwd[1][1] * local_y0 + fwd[1][2],
+        ];
+
+        let fill_f = lift_params.fill.clamp(0.0, 1.0);
+        let fill_f_u = (fill_f * 256.0) as u32;
+        let inv_f_u = 256 - fill_f_u;
+
+        let canvas_raw = canvas.as_raw();
+        let canvas_stride = cw as usize * 4;
+
+        let bg_raw = bg_img.as_mut();
+
         for ly in 0..h {
+            let row_cx0 = canvas_origin[0] + fwd_step_y[0] * ly as f32;
+            let row_cy0 = canvas_origin[1] + fwd_step_y[1] * ly as f32;
+
             for lx in 0..w {
-                // Map layer-local pixel coordinate to canvas space
-                let local_x = ((lx as f32 + 0.5) / w as f32) * layer.size[0] - half_w;
-                let local_y = ((ly as f32 + 0.5) / h as f32) * layer.size[1] - half_h;
+                let cx = (row_cx0 + fwd_step_x[0] * lx as f32) as i32;
+                let cy = (row_cy0 + fwd_step_x[1] * lx as f32) as i32;
 
-                let canvas_pt = transform_point(fwd, [local_x, local_y]);
-                let cx = canvas_pt[0].round() as i32;
-                let cy = canvas_pt[1].round() as i32;
-
-                let bg_pixel = if cx >= 0 && cx < canvas.width() as i32 && cy >= 0 && cy < canvas.height() as i32 {
-                    *canvas.get_pixel(cx as u32, cy as u32)
+                let bg_pixel = if cx >= 0 && cx < cw && cy >= 0 && cy < ch {
+                    let off = cy as usize * canvas_stride + cx as usize * 4;
+                    [canvas_raw[off], canvas_raw[off+1], canvas_raw[off+2], canvas_raw[off+3]]
                 } else {
-                    Rgba([0, 0, 0, 0])
+                    [0u8; 4]
                 };
 
-                let final_pixel = if let Some(ref s_img) = shape_img {
-                    let shape_pixel = *s_img.get_pixel(lx, ly);
-                    let f = lift_params.fill.clamp(0.0, 1.0);
-                    let r = (bg_pixel[0] as f32 * (1.0 - f) + shape_pixel[0] as f32 * f).round().clamp(0.0, 255.0) as u8;
-                    let g = (bg_pixel[1] as f32 * (1.0 - f) + shape_pixel[1] as f32 * f).round().clamp(0.0, 255.0) as u8;
-                    let b = (bg_pixel[2] as f32 * (1.0 - f) + shape_pixel[2] as f32 * f).round().clamp(0.0, 255.0) as u8;
-                    let a = (bg_pixel[3] as f32 * (1.0 - f) + shape_pixel[3] as f32 * f).round().clamp(0.0, 255.0) as u8;
-                    Rgba([r, g, b, a])
+                let dst_off = (ly * w + lx) as usize * 4;
+                let final_px = if let Some(ref s_img) = shape_img {
+                    let sp = s_img.get_pixel(lx, ly).0;
+                    [
+                        ((bg_pixel[0] as u32 * inv_f_u + sp[0] as u32 * fill_f_u) >> 8) as u8,
+                        ((bg_pixel[1] as u32 * inv_f_u + sp[1] as u32 * fill_f_u) >> 8) as u8,
+                        ((bg_pixel[2] as u32 * inv_f_u + sp[2] as u32 * fill_f_u) >> 8) as u8,
+                        ((bg_pixel[3] as u32 * inv_f_u + sp[3] as u32 * fill_f_u) >> 8) as u8,
+                    ]
                 } else {
                     bg_pixel
                 };
 
-                bg_img.put_pixel(lx, ly, final_pixel);
+                bg_raw[dst_off]     = final_px[0];
+                bg_raw[dst_off + 1] = final_px[1];
+                bg_raw[dst_off + 2] = final_px[2];
+                bg_raw[dst_off + 3] = final_px[3];
             }
         }
         bg_img
