@@ -26,6 +26,7 @@ pub fn export_sequence(
     start_frame: Option<u32>,
     end_frame: Option<u32>,
     cache: &mut ImageCache,
+    debug_layout: bool,
 ) -> Result<()> {
     let start = start_frame.unwrap_or(0);
     let total_frames = project.total_frames();
@@ -36,7 +37,7 @@ pub fn export_sequence(
     for frame in start..end {
         let time_secs = frame as f32 / fps;
         let resolved = evaluate(project, time_secs);
-        let img = render_scene(&resolved, cache, assets_dir)
+        let img = render_scene(&resolved, cache, assets_dir, debug_layout)
             .with_context(|| format!("failed to render frame {}", frame))?;
         export_frame(&img, output_dir, frame)?;
     }

@@ -51,6 +51,10 @@ enum Commands {
         /// Auto-pair unmatched template media URIs to available source assets virtually.
         #[arg(long)]
         auto_pair: bool,
+
+        /// Render with canvas zoomed out, borders shown, and element labels overlayed.
+        #[arg(long)]
+        debug_layout: bool,
     },
     /// Print metadata information about the project.
     Info {
@@ -103,6 +107,7 @@ fn main() -> Result<()> {
             frame,
             dump_graph,
             auto_pair,
+            debug_layout,
         } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
@@ -139,7 +144,7 @@ fn main() -> Result<()> {
                 if dump_graph {
                     print_render_graph(&resolved, f, time_secs);
                 }
-                let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets)?;
+                let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets, debug_layout)?;
 
                 let out_dir = if fmt == Format::Png {
                     output
@@ -156,7 +161,7 @@ fn main() -> Result<()> {
                 }
                 match fmt {
                     Format::Png => {
-                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache, debug_layout)?;
                         println!("Successfully rendered sequence to {}", output.display());
                     }
                     Format::Mp4 => {
@@ -168,7 +173,7 @@ fn main() -> Result<()> {
                         std::fs::create_dir_all(&temp_dir)?;
 
                         println!("Rendering frames...");
-                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache, debug_layout)?;
 
                         println!("Stitching video using FFmpeg...");
                         am_renderer::export::video::export_mp4(
