@@ -736,10 +736,14 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
         "com.alightcreative.effects.blink" => EffectType::Blink(BlinkParams {
             freq: get_prop_animated_float(props, "freq", 2.0),
         }),
-        "com.alightcreative.effects.fade" => EffectType::Fade(FadeParams {
-            in_time: get_prop_float(props, "in_time", 200.0),
-            out_time: get_prop_float(props, "out_time", 200.0),
-        }),
+        "com.alightcreative.effects.fade" => {
+            let in_val = get_prop_float(props, "inTime", get_prop_float(props, "in_time", 0.2));
+            let out_val = get_prop_float(props, "outTime", get_prop_float(props, "out_time", 0.2));
+            EffectType::Fade(FadeParams {
+                in_time: in_val * 1000.0,
+                out_time: out_val * 1000.0,
+            })
+        }
         "com.alightcreative.effects.tile" => EffectType::Tile(TileParams {
             mirror: get_prop_bool(props, "mirror", false),
             scale: get_prop_float(props, "scale", 1.0),

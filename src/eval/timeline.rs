@@ -73,13 +73,34 @@ pub fn evaluate(project: &Project, time_secs: f32) -> ResolvedScene {
 /// Evaluates all animated transform properties (location, scale, rotation,
 /// opacity) and copies static properties through to the resolved layer.
 fn resolve_layer(layer: &Layer, t: f32) -> ResolvedLayer {
+    let mut opacity = layer.transform.opacity.evaluate(t);
+
+    // Apply fade effect if present
+    for effect in &layer.effects {
+        if let crate::model::EffectType::Fade(ref params) = effect.effect_type {
+            let duration_ms = layer.end_time - layer.start_time;
+            let elapsed_ms = t * duration_ms;
+
+            if params.in_time > 0.0 && elapsed_ms < params.in_time {
+                let factor = (elapsed_ms / params.in_time).clamp(0.0, 1.0);
+                opacity *= factor;
+            }
+
+            let remaining_ms = duration_ms - elapsed_ms;
+            if params.out_time > 0.0 && remaining_ms < params.out_time {
+                let factor = (remaining_ms / params.out_time).clamp(0.0, 1.0);
+                opacity *= factor;
+            }
+        }
+    }
+
     ResolvedLayer {
         id: layer.id,
         label: layer.label.clone(),
         location: layer.transform.location.evaluate(t),
         scale: layer.transform.scale.evaluate(t),
         rotation: layer.transform.rotation.evaluate(t),
-        opacity: layer.transform.opacity.evaluate(t),
+        opacity,
         fill_type: layer.fill_type,
         fill_image: layer.fill_image.clone(),
         fill_color: layer.fill_color,
