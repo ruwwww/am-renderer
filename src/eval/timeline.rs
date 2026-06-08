@@ -56,7 +56,7 @@ pub fn evaluate(project: &Project, time_secs: f32) -> ResolvedScene {
             0.0
         };
 
-        let resolved = resolve_layer(layer, normalized_t);
+        let resolved = resolve_layer(layer, normalized_t, time_secs);
         resolved_layers.push(resolved);
     }
 
@@ -72,7 +72,7 @@ pub fn evaluate(project: &Project, time_secs: f32) -> ResolvedScene {
 ///
 /// Evaluates all animated transform properties (location, scale, rotation,
 /// opacity) and copies static properties through to the resolved layer.
-fn resolve_layer(layer: &Layer, t: f32) -> ResolvedLayer {
+fn resolve_layer(layer: &Layer, t: f32, time_secs: f32) -> ResolvedLayer {
     let mut opacity = layer.transform.opacity.evaluate(t);
 
     // Apply fade effect if present
@@ -109,5 +109,7 @@ fn resolve_layer(layer: &Layer, t: f32) -> ResolvedLayer {
         media_fill_mode: layer.media_fill_mode.clone(),
         effects: layer.effects.clone(),
         size: layer.size,
+        time_secs,
+        normalized_t: t,
     }
 }

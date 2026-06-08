@@ -146,4 +146,8 @@ pub struct ResolvedLayer {
     pub effects: Vec<Effect>,
     /// Layer size [w, h] in pixels.
     pub size: [f32; 2],
+    /// Evaluation time in seconds.
+    pub time_secs: f32,
+    /// Normalized time [0, 1] relative to the layer duration.
+    pub normalized_t: f32,
 }

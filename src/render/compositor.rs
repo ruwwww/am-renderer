@@ -177,8 +177,8 @@ fn render_layer(
         layer.location,
         layer.scale,
         layer.rotation,
-        0.0, // time_secs — we'd need to pass this through for full accuracy
-        0.0, // normalized_t — same caveat
+        layer.time_secs,
+        layer.normalized_t,
     );
 
     if debug_layout {
@@ -499,7 +499,7 @@ fn create_layer_source(
     for effect in &layer.effects {
         match &effect.effect_type {
             EffectType::Exposure(params) => {
-                let exp = params.exposure.evaluate(0.0);
+                let exp = params.exposure.evaluate(layer.normalized_t);
                 img = crate::render::effects::color::apply_exposure(&img, exp);
             }
             EffectType::GaussianBlur(params) => {

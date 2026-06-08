@@ -87,3 +87,42 @@ fn simple_noise(seed: f32, evolution: f32, offset: f32) -> f32 {
     let v = seed * 12345.6789 + evolution * 6789.12345 + offset * 3456.789;
     (v.sin() * 43758.5453).fract() * 2.0 - 1.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Animated;
+    use crate::model::effect::OscillateParams;
+
+    #[test]
+    fn test_oscillate_effect_over_time() {
+        let effects = vec![Effect {
+            effect_type: EffectType::Oscillate(OscillateParams {
+                angle: Animated::Static(0.0), // along x-axis (cos(0) = 1, sin(0) = 0)
+                freq: Animated::Static(1.0),  // 1 Hz
+                mag: Animated::Static(100.0), // 100 pixels magnitude
+                direction: 0,
+                osc_type: 0,
+                phase: 0.0,
+            }),
+            locally_applied: true,
+        }];
+
+        let location = [0.0, 0.0, 0.0];
+        let scale = [1.0, 1.0];
+        let rotation = 0.0;
+
+        // Evaluate at different times
+        let (loc0, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.0, 0.0);
+        let (loc_quarter, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.25, 0.25);
+        let (loc_half, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.5, 0.5);
+
+        // Sin wave with phase 0:
+        // at t = 0.0: sin(0) = 0 -> displacement = 0
+        // at t = 0.25: sin(0.25 * 1 * 2pi) = sin(pi/2) = 1 -> displacement = 100
+        // at t = 0.5: sin(0.5 * 1 * 2pi) = sin(pi) = 0 -> displacement = 0
+        assert_eq!(loc0[0], 0.0);
+        assert!((loc_quarter[0] - 100.0).abs() < 1e-4);
+        assert!((loc_half[0] - 0.0).abs() < 1e-4);
+    }
+}
