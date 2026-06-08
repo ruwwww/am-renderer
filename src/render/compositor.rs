@@ -338,8 +338,19 @@ fn create_layer_source(
     canvas: &RgbaImage,
     fwd: &[[f32; 3]; 3],
 ) -> Result<RgbaImage> {
-    let w = layer.size[0].max(1.0) as u32;
-    let h = layer.size[1].max(1.0) as u32;
+    let scale_x = layer.scale[0].abs();
+    let scale_y = layer.scale[1].abs();
+
+    let has_lift = layer.effects.iter().any(|e| matches!(e.effect_type, EffectType::Lift(_)));
+    let has_effects = !layer.effects.is_empty();
+
+    let (w, h) = if (has_lift || has_effects) && layer.fill_type != FillType::Media {
+        let w_scaled = (layer.size[0] * scale_x).max(1.0).round() as u32;
+        let h_scaled = (layer.size[1] * scale_y).max(1.0).round() as u32;
+        (w_scaled, h_scaled)
+    } else {
+        (layer.size[0].max(1.0) as u32, layer.size[1].max(1.0) as u32)
+    };
 
     // Check if the layer has a Lift (Copy Background) effect
     let mut lift_effect = None;
@@ -364,8 +375,8 @@ fn create_layer_source(
         for ly in 0..h {
             for lx in 0..w {
                 // Map layer-local pixel coordinate to canvas space
-                let local_x = lx as f32 - half_w + 0.5;
-                let local_y = ly as f32 - half_h + 0.5;
+                let local_x = ((lx as f32 + 0.5) / w as f32) * layer.size[0] - half_w;
+                let local_y = ((ly as f32 + 0.5) / h as f32) * layer.size[1] - half_h;
 
                 let canvas_pt = transform_point(fwd, [local_x, local_y]);
                 let cx = canvas_pt[0].round() as i32;
