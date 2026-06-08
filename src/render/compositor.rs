@@ -21,9 +21,12 @@ use std::collections::HashMap;
 use log::{debug, warn};
 use rayon::prelude::*;
 
+use std::sync::Arc;
+
 /// Cache for loaded source images to avoid re-reading from disk.
+#[derive(Clone)]
 pub struct ImageCache {
-    images: HashMap<String, RgbaImage>,
+    images: HashMap<String, Arc<RgbaImage>>,
     pub virtual_mappings: HashMap<String, std::path::PathBuf>,
 }
 
@@ -58,7 +61,7 @@ impl ImageCache {
     ///
     /// If the image has already been loaded, returns the cached version.
     /// Otherwise, resolves the URI to a file path within `assets_dir` and loads it.
-    pub fn load(&mut self, uri: &str, assets_dir: &Path) -> Result<&RgbaImage> {
+    pub fn load(&mut self, uri: &str, assets_dir: &Path) -> Result<Arc<RgbaImage>> {
         if !self.images.contains_key(uri) {
             let img = if let Some(physical_path) = self.virtual_mappings.get(uri) {
                 image::open(physical_path)
@@ -67,9 +70,9 @@ impl ImageCache {
             } else {
                 load_image_from_uri(uri, assets_dir)?
             };
-            self.images.insert(uri.to_string(), img);
+            self.images.insert(uri.to_string(), Arc::new(img));
         }
-        Ok(self.images.get(uri).unwrap())
+        Ok(Arc::clone(self.images.get(uri).unwrap()))
     }
 }
 
@@ -327,7 +330,7 @@ fn create_base_shape_source(
         FillType::Media => {
             if let Some(ref uri) = layer.fill_image {
                 let source = image_cache.load(uri, assets_dir)?;
-                source.clone()
+                (*source).clone()
             } else {
                 warn!("Media layer '{}' has no fill image URI", layer.label.as_deref().unwrap_or("unnamed"));
                 RgbaImage::new(w, h)

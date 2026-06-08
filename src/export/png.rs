@@ -42,14 +42,16 @@ pub fn export_sequence(
     let fps = project.fps as f32;
 
     // Pre-load all media assets into the shared cache (serial, avoids duplicate disk reads)
-    // Then clone the cache for each thread — images are already loaded so cloning is cheap.
-    // (The virtual_mappings HashMap and loaded RgbaImage buffers are Arc-free but Clone.)
+    for layer in &project.layers {
+        if layer.fill_type == crate::model::FillType::Media {
+            if let Some(ref uri) = layer.fill_image {
+                let _ = cache.load(uri, assets_dir);
+            }
+        }
+    }
 
     std::fs::create_dir_all(output_dir)
         .with_context(|| format!("failed to create output directory: {}", output_dir.display()))?;
-
-    // Build the frame list and capture virtual mappings to share across threads
-    let virtual_mappings = cache.virtual_mappings_clone();
 
     // Render frames in parallel
     let results: Vec<Result<()>> = (start..end)
@@ -58,8 +60,8 @@ pub fn export_sequence(
             let time_secs = frame as f32 / fps;
             let resolved = evaluate(project, time_secs);
 
-            // Each thread gets its own cache — images are loaded on demand per thread
-            let mut thread_cache = ImageCache::new_with_mappings(virtual_mappings.clone());
+            // Clone the pre-populated cache (extremely cheap, just increments Arc refs)
+            let mut thread_cache = cache.clone();
             let img = render_scene(&resolved, &mut thread_cache, assets_dir, debug_layout)
                 .with_context(|| format!("failed to render frame {}", frame))?;
 
