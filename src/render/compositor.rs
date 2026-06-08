@@ -6,7 +6,7 @@
 use crate::eval::timeline::ResolvedScene;
 use crate::eval::transform::{build_transform_matrix, invert_transform, transform_point};
 use crate::eval::effects::apply_transform_effects;
-use crate::model::{ResolvedLayer, FillType, Gradient};
+use crate::model::{ResolvedLayer, FillType, Gradient, EffectType};
 use crate::render::blending::blend_pixel;
 use image::{RgbaImage, Rgba};
 use anyhow::{Context, Result, bail};
@@ -294,15 +294,15 @@ fn create_layer_source(
     let w = layer.size[0].max(1.0) as u32;
     let h = layer.size[1].max(1.0) as u32;
 
-    match layer.fill_type {
+    let mut img = match layer.fill_type {
         FillType::Media => {
             if let Some(ref uri) = layer.fill_image {
                 let source = image_cache.load(uri, assets_dir)?;
-                Ok(source.clone())
+                source.clone()
             } else {
                 // No media URI — create a transparent placeholder
                 warn!("Media layer '{}' has no fill image URI", layer.label.as_deref().unwrap_or("unnamed"));
-                Ok(RgbaImage::new(w, h))
+                RgbaImage::new(w, h)
             }
         }
         FillType::Color => {
@@ -311,11 +311,11 @@ fn create_layer_source(
             for pixel in img.pixels_mut() {
                 *pixel = color;
             }
-            Ok(img)
+            img
         }
         FillType::Gradient => {
             if let Some(ref gradient) = layer.gradient {
-                Ok(render_gradient(w, h, gradient))
+                render_gradient(w, h, gradient)
             } else {
                 // Fallback to fill color
                 let color = to_rgba_u8(layer.fill_color);
@@ -323,13 +323,42 @@ fn create_layer_source(
                 for pixel in img.pixels_mut() {
                     *pixel = color;
                 }
-                Ok(img)
+                img
             }
         }
         FillType::None => {
-            Ok(RgbaImage::new(w, h))
+            RgbaImage::new(w, h)
+        }
+    };
+
+    // Apply pixel-space effects
+    for effect in &layer.effects {
+        match &effect.effect_type {
+            EffectType::Exposure(params) => {
+                let exp = params.exposure.evaluate(0.0);
+                img = crate::render::effects::color::apply_exposure(&img, exp);
+            }
+            EffectType::GaussianBlur(params) => {
+                img = crate::render::effects::blur::gaussian_blur(&img, params.radius);
+            }
+            EffectType::Vignette(params) => {
+                img = crate::render::effects::color::apply_vignette(&img, params.strength, params.scale);
+            }
+            EffectType::BrightnessContrast(params) => {
+                img = crate::render::effects::color::apply_brightness_contrast(&img, params.brightness, params.contrast);
+            }
+            EffectType::SaturationVibrance(params) => {
+                img = crate::render::effects::color::apply_hsl(&img, 0.0, params.saturation, 0.0);
+            }
+            EffectType::ColorTint(params) => {
+                let color = [params.tint[0], params.tint[1], params.tint[2], 1.0];
+                img = crate::render::effects::color::apply_color_fill(&img, color, 1.0);
+            }
+            _ => {}
         }
     }
+
+    Ok(img)
 }
 
 /// Render a gradient into an image buffer.
