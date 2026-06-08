@@ -425,13 +425,16 @@ fn convert_project(xml: &XmlScene) -> Result<Project> {
             _ => BlendMode::Normal,
         };
 
-        let size = shape
+        let raw_size = shape
             .properties
             .iter()
             .find(|p| p.name == "size")
             .and_then(|p| p.value.as_deref())
             .map(|v| parse_vec2(v, [100.0, 100.0]))
             .unwrap_or([100.0, 100.0]);
+        // Alight Motion XML coordinates size properties are in logical points,
+        // which are exactly 1/2 of physical project pixels. Multiply by 2.0 to match location space.
+        let size = [raw_size[0] * 2.0, raw_size[1] * 2.0];
 
         let effects = shape.effects.iter().map(convert_effect).collect();
 
