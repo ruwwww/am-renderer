@@ -175,13 +175,14 @@ fn main() -> Result<()> {
                         println!("Rendering frames...");
                         am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache, debug_layout)?;
 
-                        println!("Stitching video using FFmpeg...");
+                        let video_w = if debug_layout { project.width * 2 } else { project.width };
+                        let video_h = if debug_layout { project.height * 2 } else { project.height };
                         am_renderer::export::video::export_mp4(
                             &temp_dir,
                             &output,
                             project.fps as u32,
-                            project.width,
-                            project.height,
+                            video_w,
+                            video_h,
                         )?;
 
                         // Cleanup temp frames

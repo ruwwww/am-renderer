@@ -236,8 +236,8 @@ fn render_layer(
     // For each canvas row y: local = inv * (0.5 + x, 0.5 + y)
     // We use the affine decomposition: stepping one pixel in X adds a constant delta.
     let inv = &inv;
-    let step_x = [inv[0][0], inv[1][0]]; // delta per +1 in canvas-x
-    let step_y = [inv[0][1], inv[1][1]]; // delta per +1 in canvas-y
+    let step_x = [inv[0][0], inv[0][1]]; // delta per +1 in canvas-x
+    let step_y = [inv[1][0], inv[1][1]]; // delta per +1 in canvas-y
     let origin = transform_point(inv, [0.5_f32, 0.5_f32]); // local at (0,0) canvas
 
     // For each row, precompute the starting local coords then walk columns with step_x.
@@ -415,17 +415,14 @@ fn create_layer_source(
         let dy_per_py = layer.size[1] / h as f32; // how much local_y changes per ly+1
 
         // fwd row stepping vector (advancing lx by 1)
-        let fwd_step_x = [fwd[0][0] * dx_per_px, fwd[1][0] * dx_per_px];
+        let fwd_step_x = [fwd[0][0] * dx_per_px, fwd[0][1] * dx_per_px];
         // fwd column stepping vector (advancing ly by 1)
-        let fwd_step_y = [fwd[0][1] * dy_per_py, fwd[1][1] * dy_per_py];
+        let fwd_step_y = [fwd[1][0] * dy_per_py, fwd[1][1] * dy_per_py];
 
         // Compute canvas origin for ly=0, lx=0
         let local_x0 = 0.5 / w as f32 * layer.size[0] - half_w;
         let local_y0 = 0.5 / h as f32 * layer.size[1] - half_h;
-        let canvas_origin = [
-            fwd[0][0] * local_x0 + fwd[0][1] * local_y0 + fwd[0][2],
-            fwd[1][0] * local_x0 + fwd[1][1] * local_y0 + fwd[1][2],
-        ];
+        let canvas_origin = transform_point(fwd, [local_x0, local_y0]);
 
         let fill_f = lift_params.fill.clamp(0.0, 1.0);
         let fill_f_u = (fill_f * 256.0) as u32;
