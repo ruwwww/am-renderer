@@ -92,7 +92,12 @@ pub fn render_scene(
     assets_dir: &Path,
     debug_layout: bool,
 ) -> Result<RgbaImage> {
-    let mut canvas = RgbaImage::new(scene.width, scene.height);
+    let (canvas_w, canvas_h) = if debug_layout {
+        (scene.width * 2, scene.height * 2)
+    } else {
+        (scene.width, scene.height)
+    };
+    let mut canvas = RgbaImage::new(canvas_w, canvas_h);
 
     if debug_layout {
         // Fill outer background with dark gray
@@ -100,16 +105,16 @@ pub fn render_scene(
             *pixel = Rgba([26, 26, 26, 255]);
         }
 
-        // Draw canvas interior filled with project bg color (at 0.5x scale in center)
-        let canvas_w = scene.width as f32;
-        let canvas_h = scene.height as f32;
-        let cx = canvas_w / 2.0;
-        let cy = canvas_h / 2.0;
+        // Draw canvas interior filled with project bg color (at 0.5x scale in center of expanded canvas)
+        let proj_w = scene.width as f32;
+        let proj_h = scene.height as f32;
+        let cx = canvas_w as f32 / 2.0;
+        let cy = canvas_h as f32 / 2.0;
 
-        let x0 = (cx - canvas_w * 0.25) as u32;
-        let x1 = (cx + canvas_w * 0.25) as u32;
-        let y0 = (cy - canvas_h * 0.25) as u32;
-        let y1 = (cy + canvas_h * 0.25) as u32;
+        let x0 = (cx - proj_w * 0.25) as u32;
+        let x1 = (cx + proj_w * 0.25) as u32;
+        let y0 = (cy - proj_h * 0.25) as u32;
+        let y1 = (cy + proj_h * 0.25) as u32;
 
         let project_bg = to_rgba_u8(scene.bg_color);
         for y in y0..y1 {
@@ -137,6 +142,13 @@ pub fn render_scene(
         if let Err(e) = render_layer(&mut canvas, layer, image_cache, assets_dir, debug_layout) {
             warn!("Failed to render layer '{}' (id={}): {}",
                   layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
+        }
+    }
+
+    // Second pass: Draw bounding box outlines & labels on top of everything
+    if debug_layout {
+        for layer in &scene.layers {
+            draw_layer_debug_outline(&mut canvas, layer);
         }
     }
 
@@ -298,38 +310,6 @@ fn render_layer(
         for (cx, pixel) in patches {
             canvas.put_pixel(cx, cy as u32, pixel);
         }
-    }
-
-    if debug_layout {
-        let tl = transform_point(&fwd, [-half_w, -half_h]);
-        let tr = transform_point(&fwd, [half_w, -half_h]);
-        let br = transform_point(&fwd, [half_w, half_h]);
-        let bl = transform_point(&fwd, [-half_w, half_h]);
-
-        let colors = [
-            Rgba([0, 255, 0, 255]),
-            Rgba([0, 255, 255, 255]),
-            Rgba([255, 0, 255, 255]),
-            Rgba([255, 255, 0, 255]),
-            Rgba([255, 128, 0, 255]),
-            Rgba([255, 0, 0, 255]),
-            Rgba([128, 0, 255, 255]),
-        ];
-        let color = colors[(layer.id as usize) % colors.len()];
-
-        // Draw outlines
-        draw_line(canvas, tl[0] as i32, tl[1] as i32, tr[0] as i32, tr[1] as i32, color);
-        draw_line(canvas, tr[0] as i32, tr[1] as i32, br[0] as i32, br[1] as i32, color);
-        draw_line(canvas, br[0] as i32, br[1] as i32, bl[0] as i32, bl[1] as i32, color);
-        draw_line(canvas, bl[0] as i32, bl[1] as i32, tl[0] as i32, tl[1] as i32, color);
-
-        // Label
-        let clean_label: String = layer.label.as_deref().unwrap_or("Layer")
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
-            .collect();
-        let label_text = format!("{}:{}", clean_label, layer.id);
-        draw_text(canvas, tl[0] as i32 + 5, tl[1] as i32 + 5, &label_text, color, 2);
     }
 
     Ok(())
@@ -839,4 +819,74 @@ fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: Rgba<u8>, s
         draw_char(img, cur_x, y, c, color, scale);
         cur_x += 4 * scale; // 3 columns + 1 space column
     }
+}
+
+/// Draw outline bounding box and label for a layer (used in debug_layout mode)
+fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer) {
+    let canvas_w = canvas.width() as f32;
+    let canvas_h = canvas.height() as f32;
+    let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
+
+    let layer_w = layer.size[0];
+    let layer_h = layer.size[1];
+
+    if layer_w <= 0.0 || layer_h <= 0.0 {
+        return;
+    }
+
+    // Apply transform-modifying effects
+    let (mut location, mut scale, rotation) = apply_transform_effects(
+        &layer.effects,
+        layer.location,
+        layer.scale,
+        layer.rotation,
+        layer.time_secs,
+        layer.normalized_t,
+    );
+
+    // Compute original canvas sizes to preserve layout centers
+    let orig_width = canvas_w / 2.0;
+    let orig_height = canvas_h / 2.0;
+    let orig_center = [orig_width / 2.0, orig_height / 2.0];
+
+    // Scale locations and sizes by 0.5 and center them within expanded canvas
+    location[0] = (location[0] - orig_center[0]) * 0.5 + canvas_center[0];
+    location[1] = (location[1] - orig_center[1]) * 0.5 + canvas_center[1];
+    scale[0] *= 0.5;
+    scale[1] *= 0.5;
+
+    // Build forward transform: layer-local -> canvas coordinates
+    let fwd = build_transform_matrix(location, scale, rotation, canvas_center);
+
+    let half_w = layer_w / 2.0;
+    let half_h = layer_h / 2.0;
+    let tl = transform_point(&fwd, [-half_w, -half_h]);
+    let tr = transform_point(&fwd, [half_w, -half_h]);
+    let br = transform_point(&fwd, [half_w, half_h]);
+    let bl = transform_point(&fwd, [-half_w, half_h]);
+
+    let colors = [
+        Rgba([0, 255, 0, 255]),
+        Rgba([0, 255, 255, 255]),
+        Rgba([255, 0, 255, 255]),
+        Rgba([255, 255, 0, 255]),
+        Rgba([255, 128, 0, 255]),
+        Rgba([255, 0, 0, 255]),
+        Rgba([128, 0, 255, 255]),
+    ];
+    let color = colors[(layer.id as usize) % colors.len()];
+
+    // Draw outlines
+    draw_line(canvas, tl[0] as i32, tl[1] as i32, tr[0] as i32, tr[1] as i32, color);
+    draw_line(canvas, tr[0] as i32, tr[1] as i32, br[0] as i32, br[1] as i32, color);
+    draw_line(canvas, br[0] as i32, br[1] as i32, bl[0] as i32, bl[1] as i32, color);
+    draw_line(canvas, bl[0] as i32, bl[1] as i32, tl[0] as i32, tl[1] as i32, color);
+
+    // Draw clean text label
+    let clean_label: String = layer.label.as_deref().unwrap_or("Layer")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
+        .collect();
+    let label_text = format!("{}:{}", clean_label, layer.id);
+    draw_text(canvas, tl[0] as i32 + 5, tl[1] as i32 + 5, &label_text, color, 2);
 }
