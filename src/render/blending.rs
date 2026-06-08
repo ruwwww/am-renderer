@@ -24,12 +24,18 @@ pub fn blend_pixel(dst: Rgba<u8>, src: Rgba<u8>, mode: BlendMode, opacity: f32) 
     let sr = src[0] as f32 / 255.0;
     let sg = src[1] as f32 / 255.0;
     let sb = src[2] as f32 / 255.0;
-    let sa = (src[3] as f32 / 255.0) * opacity;
+    let mut sa = (src[3] as f32 / 255.0) * opacity;
 
     let dr = dst[0] as f32 / 255.0;
     let dg = dst[1] as f32 / 255.0;
     let db = dst[2] as f32 / 255.0;
     let da = dst[3] as f32 / 255.0;
+
+    // For non-Normal blend modes, scale source alpha by destination alpha
+    // to prevent blend mode colors from leaking onto transparent backgrounds.
+    if mode != crate::model::BlendMode::Normal {
+        sa *= da;
+    }
 
     // Early exit if source is fully transparent
     if sa < 1.0 / 255.0 {
@@ -64,15 +70,15 @@ pub fn blend_pixel(dst: Rgba<u8>, src: Rgba<u8>, mode: BlendMode, opacity: f32) 
         ),
     };
 
-    // Porter-Duff "over" compositing
+    // Porter-Duff "over" compositing with W3C blending
     let out_a = sa + da * (1.0 - sa);
     if out_a < 1.0 / 255.0 {
         return Rgba([0, 0, 0, 0]);
     }
 
-    let out_r = (br * sa + dr * da * (1.0 - sa)) / out_a;
-    let out_g = (bg * sa + dg * da * (1.0 - sa)) / out_a;
-    let out_b = (bb * sa + db * da * (1.0 - sa)) / out_a;
+    let out_r = (sa * (1.0 - da) * sr + da * (1.0 - sa) * dr + sa * da * br) / out_a;
+    let out_g = (sa * (1.0 - da) * sg + da * (1.0 - sa) * dg + sa * da * bg) / out_a;
+    let out_b = (sa * (1.0 - da) * sb + da * (1.0 - sa) * db + sa * da * bb) / out_a;
 
     Rgba([
         (out_r * 255.0).round().clamp(0.0, 255.0) as u8,

@@ -140,11 +140,31 @@ pub fn render_scene(
         }
     }
 
-    // Composite layers bottom to top
+    // Create a separate, transparent composition canvas for rendering the layers.
+    // This ensures that:
+    // 1. Layers with Lift (Copy Background) only sample other layers, not the project background color.
+    // 2. Blend modes (Multiply, Screen, Subtract, etc.) blend correctly with transparent backgrounds.
+    let mut comp_canvas = RgbaImage::new(canvas_w, canvas_h);
+
+    // Composite layers bottom to top onto the composition canvas
     for layer in &scene.layers {
-        if let Err(e) = render_layer(&mut canvas, layer, image_cache, assets_dir, debug_layout) {
+        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, debug_layout) {
             warn!("Failed to render layer '{}' (id={}): {}",
                   layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
+        }
+    }
+
+    // Blend the final composition canvas onto the main canvas
+    // (using standard Porter-Duff "over" blending for each pixel)
+    for y in 0..canvas_h {
+        for x in 0..canvas_w {
+            let comp_pixel = *comp_canvas.get_pixel(x, y);
+            if comp_pixel[3] > 0 {
+                let canvas_pixel = *canvas.get_pixel(x, y);
+                // Blend with Normal mode at 1.0 opacity
+                let blended = blend_pixel(canvas_pixel, comp_pixel, crate::model::BlendMode::Normal, 1.0);
+                canvas.put_pixel(x, y, blended);
+            }
         }
     }
 
