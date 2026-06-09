@@ -833,7 +833,7 @@ fn get_char_pixels(c: char) -> u16 {
     }
 }
 
-fn draw_char(img: &mut RgbaImage, x: i32, y: i32, c: char, color: Rgba<u8>, scale: i32) {
+pub(crate) fn draw_char(img: &mut RgbaImage, x: i32, y: i32, c: char, color: Rgba<u8>, scale: i32) {
     let bits = get_char_pixels(c);
     for row in 0..5 {
         for col in 0..3 {
@@ -854,7 +854,7 @@ fn draw_char(img: &mut RgbaImage, x: i32, y: i32, c: char, color: Rgba<u8>, scal
     }
 }
 
-fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: Rgba<u8>, scale: i32) {
+pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: Rgba<u8>, scale: i32) {
     let mut cur_x = x;
     for c in text.chars() {
         draw_char(img, cur_x, y, c, color, scale);

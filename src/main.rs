@@ -8,6 +8,7 @@ use am_renderer::model::effect::*;
 use am_renderer::model::*;
 use am_renderer::parser::*;
 use am_renderer::render::parse_hex_color;
+use am_renderer::render::debug_effects::render_effects_debug;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -55,6 +56,11 @@ enum Commands {
         /// Render with canvas zoomed out, borders shown, and element labels overlayed.
         #[arg(long)]
         debug_layout: bool,
+
+        /// Render debug images showing each effect independently isolated and
+        /// effect chain from top-down/bottom-up.
+        #[arg(long)]
+        debug_effects: bool,
     },
     /// Print metadata information about the project.
     Info {
@@ -108,6 +114,7 @@ fn main() -> Result<()> {
             dump_graph,
             auto_pair,
             debug_layout,
+            debug_effects,
         } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
@@ -151,6 +158,12 @@ fn main() -> Result<()> {
                 } else {
                     output.parent().unwrap_or(&output).to_path_buf()
                 };
+
+                if debug_effects {
+                    render_effects_debug(&resolved, &mut cache, &assets, f, &out_dir)?;
+                    println!("Debug effects images saved to {}/debug_effects_frame{:06}", out_dir.display(), f);
+                }
+
                 am_renderer::export::png::export_frame(&img, &out_dir, f)?;
                 println!("Successfully rendered frame {} to {}", f, out_dir.display());
             } else {
