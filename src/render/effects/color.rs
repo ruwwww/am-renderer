@@ -1,78 +1,34 @@
-//! Color effect implementations — exposure, brightness/contrast, saturation, vignette.
-//!
-//! These effects operate on pixel buffers and are applied after layer source
-//! generation but before compositing onto the canvas.
-
 use image::{RgbaImage, Rgba};
+use rayon::prelude::*;
 
-/// Apply exposure adjustment to an image buffer.
-///
-/// Exposure is measured in EV stops: each +1.0 doubles brightness.
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `exposure` - Exposure value in EV stops
-///
-/// # Returns
-/// New image with exposure applied.
-pub fn apply_exposure(img: &RgbaImage, exposure: f32) -> RgbaImage {
+pub fn apply_exposure(img: &mut RgbaImage, exposure: f32) {
     let multiplier = 2.0_f32.powf(exposure);
-    let mut result = img.clone();
-    for pixel in result.pixels_mut() {
+    for pixel in img.pixels_mut() {
         pixel[0] = ((pixel[0] as f32 * multiplier).round().clamp(0.0, 255.0)) as u8;
         pixel[1] = ((pixel[1] as f32 * multiplier).round().clamp(0.0, 255.0)) as u8;
         pixel[2] = ((pixel[2] as f32 * multiplier).round().clamp(0.0, 255.0)) as u8;
-        // Alpha unchanged
     }
-    result
 }
 
-/// Apply brightness and contrast adjustment.
-///
-/// Brightness is added to each channel. Contrast scales around the midpoint (128).
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `brightness` - Brightness adjustment (-1.0 to 1.0, mapped to -255 to +255)
-/// * `contrast` - Contrast adjustment (-1.0 to 1.0, mapped to scale factor)
-///
-/// # Returns
-/// New image with brightness/contrast applied.
-pub fn apply_brightness_contrast(img: &RgbaImage, brightness: f32, contrast: f32) -> RgbaImage {
+pub fn apply_brightness_contrast(img: &mut RgbaImage, brightness: f32, contrast: f32) {
     let bright_offset = brightness * 255.0;
-    // Contrast: map [-1, 1] to [0, 2] scale factor around midpoint
     let contrast_factor = if contrast >= 0.0 {
         1.0 / (1.0 - contrast.min(0.99))
     } else {
         1.0 + contrast
     };
 
-    let mut result = img.clone();
-    for pixel in result.pixels_mut() {
+    for pixel in img.pixels_mut() {
         for c in 0..3 {
             let v = pixel[c] as f32;
             let v = (v - 128.0) * contrast_factor + 128.0 + bright_offset;
             pixel[c] = v.round().clamp(0.0, 255.0) as u8;
         }
     }
-    result
 }
 
-/// Apply hue/saturation/lightness adjustment.
-///
-/// Converts each pixel to HSL, applies modifications, and converts back to RGB.
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `hue_shift` - Hue shift in degrees
-/// * `saturation` - Saturation adjustment (-1.0 to 1.0)
-/// * `lightness` - Lightness adjustment (-1.0 to 1.0)
-///
-/// # Returns
-/// New image with HSL adjustments applied.
-pub fn apply_hsl(img: &RgbaImage, hue_shift: f32, saturation: f32, lightness: f32) -> RgbaImage {
-    let mut result = img.clone();
-    for pixel in result.pixels_mut() {
+pub fn apply_hsl(img: &mut RgbaImage, hue_shift: f32, saturation: f32, lightness: f32) {
+    for pixel in img.pixels_mut() {
         let r = pixel[0] as f32 / 255.0;
         let g = pixel[1] as f32 / 255.0;
         let b = pixel[2] as f32 / 255.0;
@@ -90,59 +46,43 @@ pub fn apply_hsl(img: &RgbaImage, hue_shift: f32, saturation: f32, lightness: f3
         pixel[1] = (g2 * 255.0).round().clamp(0.0, 255.0) as u8;
         pixel[2] = (b2 * 255.0).round().clamp(0.0, 255.0) as u8;
     }
-    result
 }
 
-/// Apply vignette effect (darkens edges of the image).
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `intensity` - How dark the vignette is (0.0 = none, 1.0 = fully dark at edges)
-/// * `radius` - Vignette inner radius (0.0 = all dark, 1.0 = vignette starts at edge)
-///
-/// # Returns
-/// New image with vignette applied.
-pub fn apply_vignette(img: &RgbaImage, intensity: f32, radius: f32) -> RgbaImage {
+pub fn apply_vignette(img: &mut RgbaImage, intensity: f32, radius: f32) {
     let w = img.width() as f32;
     let h = img.height() as f32;
     let cx = w / 2.0;
     let cy = h / 2.0;
     let max_dist = (cx * cx + cy * cy).sqrt();
 
-    let mut result = img.clone();
-    for y in 0..img.height() {
-        for x in 0..img.width() {
-            let dx = x as f32 - cx;
-            let dy = y as f32 - cy;
-            let dist = (dx * dx + dy * dy).sqrt() / max_dist;
+    let w_u = img.width() as usize;
+    let stride = w_u * 4;
+    let raw = img.as_mut();
 
-            let vignette = if dist < radius {
-                1.0
-            } else {
-                let t = ((dist - radius) / (1.0 - radius).max(0.001)).clamp(0.0, 1.0);
-                1.0 - t * intensity
-            };
+    raw.par_chunks_mut(stride)
+        .enumerate()
+        .for_each(|(y, row)| {
+            for x in 0..w_u {
+                let dx = x as f32 - cx;
+                let dy = y as f32 - cy;
+                let dist = (dx * dx + dy * dy).sqrt() / max_dist;
 
-            let pixel = result.get_pixel_mut(x, y);
-            for c in 0..3 {
-                pixel[c] = ((pixel[c] as f32 * vignette).round().clamp(0.0, 255.0)) as u8;
+                let vignette = if dist < radius {
+                    1.0
+                } else {
+                    let t = ((dist - radius) / (1.0 - radius).max(0.001)).clamp(0.0, 1.0);
+                    1.0 - t * intensity
+                };
+
+                let idx = x * 4;
+                row[idx] = ((row[idx] as f32 * vignette).round().clamp(0.0, 255.0)) as u8;
+                row[idx + 1] = ((row[idx + 1] as f32 * vignette).round().clamp(0.0, 255.0)) as u8;
+                row[idx + 2] = ((row[idx + 2] as f32 * vignette).round().clamp(0.0, 255.0)) as u8;
             }
-        }
-    }
-    result
+        });
 }
 
-/// Apply a solid color fill overlay.
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `color` - Overlay color as RGBA [f32; 4]
-/// * `opacity` - Overlay opacity (0.0 - 1.0)
-///
-/// # Returns
-/// New image with color fill overlaid.
-pub fn apply_color_fill(img: &RgbaImage, color: [f32; 4], opacity: f32) -> RgbaImage {
-    let mut result = img.clone();
+pub fn apply_color_fill(img: &mut RgbaImage, color: [f32; 4], opacity: f32) {
     let fill = Rgba([
         (color[0] * 255.0).round() as u8,
         (color[1] * 255.0).round() as u8,
@@ -151,9 +91,9 @@ pub fn apply_color_fill(img: &RgbaImage, color: [f32; 4], opacity: f32) -> RgbaI
     ]);
 
     let opa = opacity * color[3];
-    for pixel in result.pixels_mut() {
+    for pixel in img.pixels_mut() {
         if pixel[3] == 0 {
-            continue; // Don't fill transparent areas
+            continue;
         }
         for c in 0..3 {
             let src = fill[c] as f32;
@@ -161,12 +101,8 @@ pub fn apply_color_fill(img: &RgbaImage, color: [f32; 4], opacity: f32) -> RgbaI
             pixel[c] = (dst * (1.0 - opa) + src * opa).round().clamp(0.0, 255.0) as u8;
         }
     }
-    result
 }
 
-// ── HSL conversion helpers ───────────────────────────────────────
-
-/// Convert RGB (0.0-1.0) to HSL. Returns (hue: 0-360, saturation: 0-1, lightness: 0-1).
 fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
@@ -198,7 +134,6 @@ fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     (h * 60.0, s, l)
 }
 
-/// Convert HSL to RGB. All values in standard ranges.
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
     if s.abs() < f32::EPSILON {
         return (l, l, l);
@@ -219,7 +154,6 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
     (r, g, b)
 }
 
-/// Helper for HSL→RGB conversion.
 fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
     if t < 0.0 {
         t += 1.0;
@@ -239,68 +173,64 @@ fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
     p
 }
 
-/// Apply edge detection (Sobel filter) to an image.
-///
-/// # Arguments
-/// * `img` - Source image
-/// * `smoothing` - Blend/smooth factor
-/// * `threshold` - Edge threshold
-/// * `invert` - If true, returns dark edges on white, else white edges on black.
-pub fn find_edges(img: &RgbaImage, _smoothing: f32, threshold: f32, invert: bool) -> RgbaImage {
-    let w = img.width();
-    let h = img.height();
-    let mut result = img.clone();
+pub fn find_edges(img: &mut RgbaImage, _smoothing: f32, threshold: f32, invert: bool) {
+    let w = img.width() as usize;
+    let h = img.height() as usize;
 
     if w < 3 || h < 3 {
-        return result;
+        return;
     }
 
-    let mut gray = vec![0.0f32; (w * h) as usize];
-    for y in 0..h {
+    let gray: Vec<f32> = (0..h).into_par_iter().flat_map(|y| {
+        let mut row = Vec::with_capacity(w);
         for x in 0..w {
-            let p = img.get_pixel(x, y);
-            gray[(y * w + x) as usize] = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
+            let p = img.get_pixel(x as u32, y as u32);
+            row.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
         }
-    }
+        row
+    }).collect();
 
-    let result_raw = result.as_mut();
-    let w_usize = w as usize;
     let threshold_10 = threshold * 10.0;
+    let stride = w * 4;
+    let raw = img.as_mut();
 
-    for y in 1..(h - 1) {
-        for x in 1..(w - 1) {
-            let idx = (y as usize) * w_usize + (x as usize);
-            let tl = gray[idx - w_usize - 1];
-            let tc = gray[idx - w_usize];
-            let tr = gray[idx - w_usize + 1];
-            let ml = gray[idx - 1];
-            let mr = gray[idx + 1];
-            let bl = gray[idx + w_usize - 1];
-            let bc = gray[idx + w_usize];
-            let br = gray[idx + w_usize + 1];
+    raw.par_chunks_mut(stride)
+        .enumerate()
+        .for_each(|(y, row)| {
+            if y == 0 || y == h - 1 {
+                return;
+            }
+            for x in 1..(w - 1) {
+                let idx = y * w + x;
+                let tl = gray[idx - w - 1];
+                let tc = gray[idx - w];
+                let tr = gray[idx - w + 1];
+                let ml = gray[idx - 1];
+                let mr = gray[idx + 1];
+                let bl = gray[idx + w - 1];
+                let bc = gray[idx + w];
+                let br = gray[idx + w + 1];
 
-            let gx = -tl + tr - 2.0 * ml + 2.0 * mr - bl + br;
-            let gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
+                let gx = -tl + tr - 2.0 * ml + 2.0 * mr - bl + br;
+                let gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
 
-            let magnitude = (gx * gx + gy * gy).sqrt();
-            let edge_val = if magnitude < threshold_10 {
-                0.0
-            } else {
-                magnitude.min(255.0)
-            };
+                let magnitude = (gx * gx + gy * gy).sqrt();
+                let edge_val = if magnitude < threshold_10 {
+                    0.0
+                } else {
+                    magnitude.min(255.0)
+                };
 
-            let final_val = if invert {
-                (255.0 - edge_val).round() as u8
-            } else {
-                edge_val.round() as u8
-            };
+                let final_val = if invert {
+                    (255.0 - edge_val).round() as u8
+                } else {
+                    edge_val.round() as u8
+                };
 
-            let out_idx = idx * 4;
-            result_raw[out_idx] = final_val;
-            result_raw[out_idx + 1] = final_val;
-            result_raw[out_idx + 2] = final_val;
-        }
-    }
-
-    result
+                let out_idx = x * 4;
+                row[out_idx] = final_val;
+                row[out_idx + 1] = final_val;
+                row[out_idx + 2] = final_val;
+            }
+        });
 }

@@ -495,49 +495,64 @@ fn create_layer_source(
         create_base_shape_source(layer, w, h, image_cache, assets_dir)?
     };
 
-    // Apply pixel-space effects
     for effect in &layer.effects {
         match &effect.effect_type {
             EffectType::Exposure(params) => {
                 let exp = params.exposure.evaluate(layer.normalized_t);
-                img = crate::render::effects::color::apply_exposure(&img, exp);
+                if exp.abs() > 0.01 {
+                    crate::render::effects::color::apply_exposure(&mut img, exp);
+                }
             }
             EffectType::GaussianBlur(params) => {
-                img = crate::render::effects::blur::gaussian_blur(&img, params.radius);
+                if params.radius > 0.5 {
+                    img = crate::render::effects::blur::gaussian_blur(&img, params.radius);
+                }
             }
             EffectType::Vignette(params) => {
-                img = crate::render::effects::color::apply_vignette(&img, params.strength, params.scale);
+                if params.strength.abs() > 0.001 {
+                    crate::render::effects::color::apply_vignette(&mut img, params.strength, params.scale);
+                }
             }
             EffectType::BrightnessContrast(params) => {
-                img = crate::render::effects::color::apply_brightness_contrast(&img, params.brightness, params.contrast);
+                if params.brightness.abs() > 0.001 || params.contrast.abs() > 0.001 {
+                    crate::render::effects::color::apply_brightness_contrast(&mut img, params.brightness, params.contrast);
+                }
             }
             EffectType::SaturationVibrance(params) => {
-                img = crate::render::effects::color::apply_hsl(&img, 0.0, params.saturation, 0.0);
+                if params.saturation.abs() > 0.001 {
+                    crate::render::effects::color::apply_hsl(&mut img, 0.0, params.saturation, 0.0);
+                }
             }
             EffectType::ColorTint(params) => {
                 let color = [params.tint[0], params.tint[1], params.tint[2], 1.0];
-                img = crate::render::effects::color::apply_color_fill(&img, color, 1.0);
+                crate::render::effects::color::apply_color_fill(&mut img, color, 1.0);
             }
             EffectType::FindEdges(params) => {
-                img = crate::render::effects::color::find_edges(
-                    &img, params.smoothing, params.threshold, params.invert,
+                crate::render::effects::color::find_edges(
+                    &mut img, params.smoothing, params.threshold, params.invert,
                 );
             }
             EffectType::StretchSegment(params) => {
-                img = crate::render::effects::uv::apply_stretch_segment(
-                    &img, params.angle, params.stretch, params.offset, params.smooth,
-                );
+                if params.stretch.abs() > 0.5 {
+                    img = crate::render::effects::uv::apply_stretch_segment(
+                        &img, params.angle, params.stretch, params.offset, params.smooth,
+                    );
+                }
             }
             EffectType::Offset(params) => {
-                img = crate::render::effects::uv::apply_offset(
-                    &img, params.offset[0], params.offset[1],
-                );
+                if params.offset[0].abs() > 0.5 || params.offset[1].abs() > 0.5 {
+                    img = crate::render::effects::uv::apply_offset(
+                        &img, params.offset[0], params.offset[1],
+                    );
+                }
             }
             EffectType::Tile(params) => {
-                img = crate::render::effects::uv::apply_tile(
-                    &img, params.scale, params.phase, params.vert_offset,
-                    params.mirror, params.angle,
-                );
+                if params.scale > 1.01 || params.angle.abs() > 0.001 {
+                    img = crate::render::effects::uv::apply_tile(
+                        &img, params.scale, params.phase, params.vert_offset,
+                        params.mirror, params.angle,
+                    );
+                }
             }
             _ => {}
         }
