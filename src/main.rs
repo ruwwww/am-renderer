@@ -797,6 +797,8 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
             scale: get_prop_float(props, "scale", 1.0),
             strength: get_prop_float(props, "strength", 0.5),
             tint: get_prop_float(props, "tint", 0.0),
+            overlaycolor: get_prop_color4(props, "overlaycolor", [0.0, 0.0, 0.0, 1.0]),
+            punchout: get_prop_bool(props, "punchout", false),
         }),
         "com.alightcreative.effects.sharpen" => EffectType::Sharpen(SharpenParams {
             radius: get_prop_float(props, "radius", 1.0),
@@ -826,7 +828,10 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
             high_threshold: get_prop_animated_float(props, "high_threshold", 1.0),
         }),
         "com.alightcreative.effects.offset" => EffectType::Offset(OffsetParams {
-            offset: get_prop_vec2(props, "offset", [0.0, 0.0]),
+            offset: {
+                let raw_offset = get_prop_vec2(props, "offset", [0.0, 0.0]);
+                [raw_offset[0] * 2.0, raw_offset[1] * 2.0]
+            },
             feather: get_prop_float(props, "feather", 0.0),
             mask: get_prop_bool(props, "mask", false),
         }),

@@ -510,7 +510,16 @@ fn create_layer_source(
             }
             EffectType::Vignette(params) => {
                 if params.strength.abs() > 0.001 {
-                    crate::render::effects::color::apply_vignette(&mut img, params.strength, params.scale);
+                    crate::render::effects::color::apply_vignette(
+                        &mut img,
+                        params.feather,
+                        params.roundness,
+                        params.scale,
+                        params.strength,
+                        params.tint,
+                        params.overlaycolor,
+                        params.punchout,
+                    );
                 }
             }
             EffectType::BrightnessContrast(params) => {
@@ -541,6 +550,7 @@ fn create_layer_source(
             }
             EffectType::Offset(params) => {
                 if params.offset[0].abs() > 0.5 || params.offset[1].abs() > 0.5 {
+                    println!("DEBUG: Layer '{}' applying Offset: dx={}, dy={}, img_w={}, img_h={}", layer.label.as_deref().unwrap_or("unnamed"), params.offset[0], params.offset[1], img.width(), img.height());
                     img = crate::render::effects::uv::apply_offset(
                         &img, params.offset[0], params.offset[1],
                     );

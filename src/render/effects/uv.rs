@@ -162,7 +162,7 @@ pub fn apply_offset(img: &RgbaImage, dx: f32, dy: f32) -> RgbaImage {
     result
 }
 
-pub fn apply_stretch_segment(img: &RgbaImage, angle: f32, stretch: f32, offset: f32, _smooth: f32) -> RgbaImage {
+pub fn apply_stretch_segment(img: &RgbaImage, angle: f32, stretch: f32, offset: f32, smooth: f32) -> RgbaImage {
     let w = img.width() as usize;
     let h = img.height() as usize;
     let mut result = RgbaImage::new(w as u32, h as u32);
@@ -180,6 +180,9 @@ pub fn apply_stretch_segment(img: &RgbaImage, angle: f32, stretch: f32, offset: 
     let stride = w * 4;
     let dst_raw = result.as_mut();
 
+    let smooth_scale_inside = smooth.clamp(0.0, 1.0);
+    let smooth_scale_outside = 1.0 - smooth_scale_inside;
+
     dst_raw
         .par_chunks_mut(stride)
         .enumerate()
@@ -187,23 +190,23 @@ pub fn apply_stretch_segment(img: &RgbaImage, angle: f32, stretch: f32, offset: 
             for x in 0..w {
                 let dx = x as f32 - cx;
                 let dy = y as f32 - cy;
-                let proj = dx * sin_a - dy * cos_a;
+                let proj = dx * cos_a + dy * sin_a;
 
                 let (sx, sy) = if proj > half_stretch {
-                    let src_x = x as f32 - sin_a * half_stretch;
-                    let src_y = y as f32 + cos_a * half_stretch;
+                    let src_x = x as f32 - cos_a * half_stretch * smooth_scale_outside;
+                    let src_y = y as f32 - sin_a * half_stretch * smooth_scale_outside;
                     (src_x.round().clamp(0.0, w_m1) as usize,
                      src_y.round().clamp(0.0, h_m1) as usize)
                 } else if proj < -half_stretch {
-                    let src_x = x as f32 + sin_a * half_stretch;
-                    let src_y = y as f32 - cos_a * half_stretch;
+                    let src_x = x as f32 + cos_a * half_stretch * smooth_scale_outside;
+                    let src_y = y as f32 + sin_a * half_stretch * smooth_scale_outside;
                     (src_x.round().clamp(0.0, w_m1) as usize,
                      src_y.round().clamp(0.0, h_m1) as usize)
                 } else {
-                    let t = proj.clamp(-half_stretch, half_stretch);
-                    let src_x = (cx + t * sin_a).round().clamp(0.0, w_m1) as usize;
-                    let src_y = (cy - t * cos_a).round().clamp(0.0, h_m1) as usize;
-                    (src_x, src_y)
+                    let src_x = x as f32 - proj * cos_a * smooth_scale_outside;
+                    let src_y = y as f32 - proj * sin_a * smooth_scale_outside;
+                    (src_x.round().clamp(0.0, w_m1) as usize,
+                     src_y.round().clamp(0.0, h_m1) as usize)
                 };
 
                 let src_idx = sy * stride + sx * 4;

@@ -349,6 +349,10 @@ pub struct VignetteParams {
     pub strength: f32,
     /// Tint amount applied to vignetted regions.
     pub tint: f32,
+    /// Color of the vignette (overlay color).
+    pub overlaycolor: [f32; 4],
+    /// Punchout mode (makes center transparent instead of color blending).
+    pub punchout: bool,
 }
 
 impl Default for VignetteParams {
@@ -359,6 +363,8 @@ impl Default for VignetteParams {
             scale: 1.0,
             strength: 0.5,
             tint: 0.0,
+            overlaycolor: [0.0, 0.0, 0.0, 1.0],
+            punchout: false,
         }
     }
 }
