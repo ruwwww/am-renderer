@@ -550,7 +550,6 @@ fn create_layer_source(
             }
             EffectType::Offset(params) => {
                 if params.offset[0].abs() > 0.5 || params.offset[1].abs() > 0.5 {
-                    println!("DEBUG: Layer '{}' applying Offset: dx={}, dy={}, img_w={}, img_h={}", layer.label.as_deref().unwrap_or("unnamed"), params.offset[0], params.offset[1], img.width(), img.height());
                     img = crate::render::effects::uv::apply_offset(
                         &img, params.offset[0], params.offset[1],
                     );
@@ -910,14 +909,9 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer) {
         layer.normalized_t,
     );
 
-    // Compute original canvas sizes to preserve layout centers
-    let orig_width = canvas_w / 2.0;
-    let orig_height = canvas_h / 2.0;
-    let orig_center = [orig_width / 2.0, orig_height / 2.0];
-
     // Scale locations and sizes by 0.5 and center them within expanded canvas
-    location[0] = (location[0] - orig_center[0]) * 0.5 + canvas_center[0];
-    location[1] = (location[1] - orig_center[1]) * 0.5 + canvas_center[1];
+    location[0] = (location[0] - canvas_center[0]) * 0.5 + canvas_center[0];
+    location[1] = (location[1] - canvas_center[1]) * 0.5 + canvas_center[1];
     scale[0] *= 0.5;
     scale[1] *= 0.5;
 

@@ -62,7 +62,6 @@ pub fn apply_vignette(
     let h = img.height();
     let cx = w as f32 / 2.0;
     let cy = h as f32 / 2.0;
-    println!("DEBUG: apply_vignette: w={}, h={}, feather={}, roundness={}, scale={}, strength={}, tint={}, punchout={}", w, h, feather, roundness, scale, strength, tint, punchout);
 
     let w_u = w as usize;
     let stride = w_u * 4;

@@ -50,7 +50,8 @@ enum Commands {
         dump_graph: bool,
 
         /// Auto-pair unmatched template media URIs to available source assets virtually.
-        #[arg(long)]
+        /// Use --no-auto-pair to disable.
+        #[arg(long = "auto-pair", default_missing_value = "true", default_value_t = true, num_args = 0..=1, require_equals = false)]
         auto_pair: bool,
 
         /// Render with canvas zoomed out, borders shown, and element labels overlayed.
@@ -332,6 +333,11 @@ fn convert_project(xml: &XmlScene) -> Result<Project> {
         .map(parse_hex_color)
         .unwrap_or([0.0, 0.0, 0.0, 1.0]);
 
+    // Coordinate scale: XML uses a logical coordinate system where
+    // 1 logical unit = 2 pixels at the render canvas resolution.
+    // See AGENTS.md for full documentation.
+    let coord_scale = 2.0;
+
     let total_time = xml.total_time.parse().context("invalid totalTime")?;
     let fps = xml.fps.parse().context("invalid fps")?;
 
@@ -451,11 +457,11 @@ fn convert_project(xml: &XmlScene) -> Result<Project> {
             .and_then(|p| p.value.as_deref())
             .map(|v| parse_vec2(v, [100.0, 100.0]))
             .unwrap_or([100.0, 100.0]);
-        // Alight Motion XML coordinates size properties are in logical points,
-        // which are exactly 1/2 of physical project pixels. Multiply by 2.0 to match location space.
-        let size = [raw_size[0] * 2.0, raw_size[1] * 2.0];
+        // Alight Motion XML size values are in logical points (half-canvas coords).
+        // Multiply by coord_scale to convert to pixel dimensions.
+        let size = [raw_size[0] * coord_scale, raw_size[1] * coord_scale];
 
-        let effects = shape.effects.iter().map(convert_effect).collect();
+        let effects = shape.effects.iter().map(|e| convert_effect(e, coord_scale)).collect();
 
         layers.push(Layer {
             id,
@@ -711,7 +717,7 @@ fn get_prop_color4(properties: &[XmlProperty], name: &str, default_val: [f32; 4]
         .unwrap_or(default_val)
 }
 
-fn convert_effect(xml: &XmlEffect) -> Effect {
+fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
     let locally_applied = xml
         .locally_applied
         .as_deref()
@@ -801,14 +807,14 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
             punchout: get_prop_bool(props, "punchout", false),
         }),
         "com.alightcreative.effects.sharpen" => EffectType::Sharpen(SharpenParams {
-            radius: get_prop_float(props, "radius", 1.0),
+            radius: get_prop_float(props, "radius", 1.0) * coord_scale,
             strength: get_prop_float(props, "strength", 0.5),
         }),
         "com.alightcreative.effects.gaussianblur" => EffectType::GaussianBlur(GaussianBlurParams {
-            radius: get_prop_float(props, "radius", get_prop_float(props, "strength", 0.05) * 100.0),
+            radius: get_prop_float(props, "radius", get_prop_float(props, "strength", 0.05) * 100.0) * coord_scale,
         }),
         "com.alightcreative.effects.lensblur" => EffectType::LensBlur(LensBlurParams {
-            radius: get_prop_float(props, "radius", 5.0),
+            radius: get_prop_float(props, "radius", 5.0) * coord_scale,
             strength: get_prop_float(props, "strength", 1.0),
         }),
         "com.alightcreative.effects.gradientoverlay" => {
@@ -830,7 +836,7 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
         "com.alightcreative.effects.offset" => EffectType::Offset(OffsetParams {
             offset: {
                 let raw_offset = get_prop_vec2(props, "offset", [0.0, 0.0]);
-                [raw_offset[0] * 2.0, raw_offset[1] * 2.0]
+                [raw_offset[0] * coord_scale, raw_offset[1] * coord_scale]
             },
             feather: get_prop_float(props, "feather", 0.0),
             mask: get_prop_bool(props, "mask", false),
@@ -842,8 +848,8 @@ fn convert_effect(xml: &XmlEffect) -> Effect {
         }),
         "com.alightcreative.effects.stretchsegment" => EffectType::StretchSegment(StretchSegmentParams {
             angle: get_prop_float(props, "angle", 0.0),
-            stretch: get_prop_float(props, "stretch", 0.0),
-            offset: get_prop_float(props, "offset", 0.0),
+            stretch: get_prop_float(props, "stretch", 0.0) * coord_scale,
+            offset: get_prop_float(props, "offset", 0.0) * coord_scale,
             smooth: get_prop_float(props, "smooth", 0.0),
         }),
         other => EffectType::Unknown(other.to_string()),
