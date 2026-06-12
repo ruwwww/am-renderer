@@ -1,113 +1,100 @@
-# Alight Motion Renderer — Coordinate System & Conventions
+# am-renderer — Agent Guide
 
-## Coordinate Space
-
-Alight Motion XML uses a **mixed coordinate system** where different properties live in different coordinate spaces:
-
-| Property | Coordinate space | Example (1080×1920 canvas) |
-|---|---|---|
-| `location` | **Pixels** (matches canvas) | `540, 960` = canvas center |
-| `size` | **Logical points** (half-canvas) | `540, 960` → `1080, 1920` px |
-| `scale` | **Unitless multiplier** | `1.0, 1.0` = no change |
-| Effect pixel params | **Logical points** | `offset=300` → `600` px |
-
-The fixed `coord_scale = 2.0` converts logical points to pixel values. It is applied to `size` and pixel-valued effect parameters, but **never** to `location` or `scale`.
-
-### Scene Dimensions
-
-The XML `<scene>` tag has two sets of dimensions:
-
-| Attribute | Purpose |
-|---|---|
-| `width` / `height` | Internal canvas / coordinate space used for rendering |
-| `exportWidth` / `exportHeight` | Target output resolution (may differ from canvas) |
-
-For most projects `width == exportWidth`, but some projects use a smaller canvas with a larger export (e.g., `width=720 exportWidth=1080` = 1.5× scale).
-
-The renderer always renders at `width × height`. To produce the final output at `exportWidth × exportHeight`, the rendered image would need to be upscaled (not yet implemented).
-
-## Rendering Pipeline
-
-### 1. XML → Model (`main.rs`)
-
+## Quick start
+```bash
+cargo build                          # Debug build
+cargo build --release                # Release build (LTO, thin LTO, panic=abort)
+cargo test                           # All tests (inline only — parser/xml.rs, effects/transform.rs)
+cargo test parser                    # Parser tests only
+cargo test effects                   # Effects tests only
+cargo run -- info -i presets/preset1.xml
+cargo run -- render -i presets/preset1.xml -a assets -o output.mp4
+cargo run --example analyze_presets  # Inline example
+cargo run --example auto_pair -- -i presets/preset1.xml -s <src> -o assets
+RUST_LOG=debug cargo run -- render ...  # env_logger debug output
 ```
-XML <scene> width/height  →  project.width/height     (pixels, no scaling)
-XML <location>            →  layer.location            (pixels, no scaling)
-XML <scale>               →  layer.scale               (unitless, no scaling)
-XML <property name="size"> → layer.size                (× coord_scale = pixels)
-XML <effect> params       →  effect.*                  (× coord_scale where applicable)
+- **Dep**: `ffmpeg` on PATH (required only for MP4 export). No other system deps.
+- **Rust edition 2021**, no nightly features.
+
+## Project structure
 ```
-
-### 2. Model → Resolved (`eval/timeline.rs`)
-
-Animated properties are evaluated at the current time. Values pass through unchanged — no coordinate transforms.
-
-### 3. Resolved → Canvas (`src/render/compositor/`)
-
-#### Layer source buffer creation (`create_layer_source`)
-
-For layers **with effects** (non-Media fill):
-```
-buffer_w = layer.size[0] × |layer.scale[0]|
-buffer_h = layer.size[1] × |layer.scale[1]|
-```
-This creates a buffer at the layer's full canvas footprint so effects operate at final resolution.
-
-For **Media** layers or layers without effects: buffer uses raw `layer.size` (the image is loaded at native resolution).
-
-#### Lift (Copy Background) sampling
-
-Uses the forward transform to map each buffer pixel to a canvas coordinate, sampling the composition canvas already rendered below. Key values:
-- `half_w = layer.size[0] / 2.0` — center-origin offset
-- `dx_per_px = layer.size[0] / buffer_w` — pixel-to-local step
-
-#### Inverse transform compositing (`render_layer`)
-
-For each canvas pixel, the inverse transform maps to layer-local coordinates (center-origin), then adds `half_w`/`half_h` to get buffer coordinates (top-left-origin). The default "stretch" fill mode maps buffer coordinates to source image coordinates:
-```
-sx = lx_raw / layer.size[0] × src_w
-sy = ly_raw / layer.size[1] × src_h
+src/
+  lib.rs          — Re-exports 6 modules
+  main.rs         — CLI entrypoint (clap). Defines Render + Info subcommands.
+  config.rs       — TOML config → Vec<disabled_effect_names> for filtering effects
+  parser/         — XML deserialization (quick-xml) + converter to domain model
+    types.rs      — Raw XML serde types (XmlScene, XmlShape, etc.)
+    xml.rs        — parse_xml() entry, contains only #[cfg(test)] unit tests
+    converter.rs  — convert_project(): XmlScene → Project with Animated<T> fields
+  model/          — Domain types: Project, Layer, Effect, Animated<T>, Keyframe
+    animation.rs  — Animated<T>::evaluate(normalized_t), cubic bezier via Newton-Raphson
+    effect.rs     — EffectType enum with 25+ variants, all parameter structs
+  eval/           — Project → ResolvedScene at time t
+    timeline.rs   — evaluate(project, time_secs) — stateless, deterministic
+    transform.rs  — build_transform_matrix, invert_transform, transform_point
+  render/         — All rendering + effects
+    compositor/   — render_scene(), render_layer(), create_layer_source()
+    effects/      — 20+ effect files, dispatched via apply_pixel_effects() in mod.rs
+    blending.rs   — Porter-Duff per-pixel blend modes
+    debug_layout.rs / debug_effects.rs
+  export/         — PNG sequence (export_sequence) + MP4 via ffmpeg (export_mp4)
+examples/         — analyze_presets, auto_pair, test_sizing
+presets/          — 9 XML test presets
 ```
 
-## `coord_scale` Application Table
+## Coordinate system (`coord_scale = 2.0`)
 
-**Scaled (logical → pixels):**
+Alight Motion XML mixes coordinate spaces. The fixed `coord_scale = 2.0` converts logical points → pixels. Applied in `parser/converter.rs`.
 
-| Property | Where | Reason |
-|---|---|---|
-| `size` | `main.rs:462` | Half-canvas coords in XML |
-| `offset` (Offset effect) | `main.rs:838` | Pixel displacement |
-| `stretch`, `offset` (StretchSegment) | `main.rs:850-851` | Pixel stretch/offset |
-| `radius` (GaussianBlur) | `main.rs:813` | Pixel blur radius |
-| `radius` (Sharpen) | `main.rs:809` | Pixel blur radius |
-| `radius` (LensBlur) | `main.rs:816` | Pixel blur radius |
+| Property | Space | Scaled? | Where |
+|---|---|---|---|
+| `location` | Pixels (canvas coords) | **No** | — |
+| `size` | Logical points (half-canvas) | **Yes** (×2) | `converter.rs:158` |
+| `scale` | Unitless multiplier | **No** | — |
+| `radius` (GaussianBlur/Sharpen/LensBlur) | Logical points | **Yes** (×2) | `converter.rs:507,511,514` |
 
-**NOT scaled (already correct units):**
+**NOT scaled** (already correct): `location`, `scale`, Vignette params (normalized 0–1), Exposure params, Saturation/Vibrance, Offset vector, StretchSegment stretch/offset, Swirl radius, blend modes, opacities, colors
 
-| Property | Reason |
-|---|---|
-| `location` | Already in pixel coordinates |
-| `scale` | Unitless multiplier |
-| Vignette params (`scale`, `feather`, etc.) | Normalized 0–1 range |
-| Exposure params (`exposure`, `gamma`) | Exposure values |
-| Saturation/Vibrance | Normalized range |
-| Blend modes, opacities, colors | Unitless |
+### Scene dimensions
+- XML `<scene width="W" height="H" exportWidth="EW" exportHeight="EH">`
+- `width`/`height` = internal canvas (what the renderer uses)
+- `exportWidth`/`exportHeight` = output resolution (may differ — upscale not yet implemented)
 
-## Debug Layout Mode
+## Key architecture — what to know
 
-When `--debug-layout` is active:
+1. **Stateless evaluation**: `evaluate(time_secs)` is deterministic. No frame-to-frame state. Given same `Project` + time → same `ResolvedScene`. Temporal effects (motion blur, blink) must use explicit multi-sample, not state accumulation.
 
-1. Canvas is expanded to `2 × scene.width × scene.height`
-2. Layer transforms (location, scale) are halved relative to canvas center
-3. Bounding boxes and labels are drawn around each layer
-4. The project's canvas boundary is outlined in the center quadrant
+2. **Inverse-transform sampling**: For each output pixel, compute inverse transform to find source UV. Sub-pixel accurate. Two-pass separable blurs. Per-row parallelism via rayon.
 
-This mode visualizes the coordinate space but does **not** change effect processing (effects still operate on full-size layer buffers).
+3. **Compositing**: Layers rendered bottom-to-top onto a transparent composition canvas (so Lift effects sample only other layers, not project background), then blended onto main canvas via Porter-Duff "over".
 
-## Future Considerations
+4. **Effect dispatch**: `apply_pixel_effects()` in `render/effects/mod.rs` matches `EffectType` variants to effect functions. Transform-modifying effects (Oscillate, Swing, RandomDisplace, Spin) are handled separately in `transform.rs` before pixel effects run.
 
-If full `exportWidth × exportHeight` output support is added, the render pipeline will need:
+5. **Coord scaling is applied in `parser/converter.rs` during XML→model conversion**, not in effects code. See `coord_scale` application table above.
 
-1. Compute `output_scale_x = exportWidth / width` and `output_scale_y = exportHeight / height`
-2. Upscale the final rendered `width × height` buffer to `exportWidth × exportHeight`
-3. Effect `coord_scale` would remain `2.0` since effects operate on internal-resolution buffers
+## How to add a new effect
+1. **Parameter struct** → `model/effect.rs` — add `EffectType` variant + params struct with `Default`
+2. **XML parsing** → `parser/types.rs` if new XML tags needed; `parser/converter.rs` in `convert_effect()`
+3. **If transform modifier**: implement in `render/effects/transform.rs`
+4. **If pixel/image effect**: new file in `render/effects/` + match arm in `apply_pixel_effects()` in `mod.rs`
+5. **Add type_name()** to `EffectType::type_name()` in `effect.rs` (needed for config-based disabling)
+
+## CLI flags worth knowing
+- `--auto-pair` — Round-robin assign asset files to XML virtual URIs (useful when media was renamed/moved)
+- `--config` — TOML file listing `disabled_effects = ["GaussianBlur", "Vignette"]` to skip effects
+- `--debug-layout` — Expanded canvas with bounding boxes, layer labels, dimmed out-of-bounds areas
+- `--debug-effects` — Render each effect in isolation for debugging
+- `--dump-graph` — Print resolved layer/effect tree (useful for debugging parse issues)
+- `--frame N` vs `--start-frame N / --end-frame N / --start-time S / --end-time S` — Cannot combine `--frame` with range flags; cannot combine `--start-frame` with `--start-time`
+
+## Testing quirks
+- Tests are **inline only**: `#[cfg(test)] mod tests` in `parser/xml.rs` and `render/effects/transform.rs`
+- No integration tests, no fixtures directory, no benchmarks
+- `cargo test` is fast — no external services needed
+
+## Code conventions
+- 4-space indent, `mod.rs` pattern
+- `Animated<T>` for animatable fields; `Lerp` trait must be implemented for any type used as `Animated<T>` (already done: f32, [f32;2], [f32;3], Vec2)
+- `anyhow::Result` throughout; avoid unwrap/expect in library code
+- Image: `RgbaImage` (u8 storage), `[f32; 4]` for processing
+- Math: `glam::Vec2`, `glam::Mat3` for 2D affine
