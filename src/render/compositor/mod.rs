@@ -317,6 +317,30 @@ fn render_layer(
     let layer_blend_mode = layer.blend_mode;
     let layer_opacity = layer.opacity;
 
+    // Find if there is a post-transform Swirl effect (locallyApplied = false)
+    let post_swirl = layer.effects.iter().find(|e| {
+        !disabled_effects.iter().any(|d| d == e.effect_type.type_name())
+            && !e.locally_applied
+            && matches!(e.effect_type, crate::model::EffectType::Swirl(_))
+    });
+
+    let post_swirl_params = if let Some(crate::model::Effect {
+        effect_type: crate::model::EffectType::Swirl(ref params),
+        ..
+    }) = post_swirl {
+        if params.strength.abs() > 0.001 {
+            Some(params)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let canvas_h_f = canvas_h_u as f32;
+    let center_x = location[0];
+    let center_y = location[1];
+
     // Collect rows in parallel; each row produces a Vec of (x, pixel) patches
     let row_patches: Vec<Vec<(u32, Rgba<u8>)>> = (0..canvas_h_u)
         .into_par_iter()
@@ -327,8 +351,31 @@ fn render_layer(
             let row_ly0 = origin[1] + step_y[1] * cy as f32;
 
             for cx in 0..canvas_w_u {
-                let lx_raw = row_lx0 + step_x[0] * cx as f32 + half_w;
-                let ly_raw = row_ly0 + step_x[1] * cx as f32 + half_h;
+                let (lx_raw, ly_raw) = if let Some(swirl) = post_swirl_params {
+                    let dx = (cx as f32 + 0.5 - center_x) / canvas_h_f;
+                    let dy = (cy as f32 + 0.5 - center_y) / canvas_h_f;
+                    let dist = (dx * dx + dy * dy).sqrt();
+
+                    let (mut rx, mut ry) = (dx, dy);
+                    if dist < swirl.radius {
+                        let percent = (swirl.radius - dist) / swirl.radius;
+                        let theta = percent.powi(swirl.exponent) * swirl.strength * 100.0;
+                        let s = theta.sin();
+                        let c = theta.cos();
+                        rx = dx * c - dy * s;
+                        ry = dx * s + dy * c;
+                    }
+
+                    let cx_d = rx * canvas_h_f + center_x;
+                    let cy_d = ry * canvas_h_f + center_y;
+
+                    let local = transform_point(inv, [cx_d, cy_d]);
+                    (local[0] + half_w, local[1] + half_h)
+                } else {
+                    let lx = row_lx0 + step_x[0] * cx as f32 + half_w;
+                    let ly = row_ly0 + step_x[1] * cx as f32 + half_h;
+                    (lx, ly)
+                };
 
                 if lx_raw < 0.0 || lx_raw >= layer_w || ly_raw < 0.0 || ly_raw >= layer_h {
                     continue;
