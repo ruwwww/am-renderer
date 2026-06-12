@@ -1,30 +1,30 @@
-use image::RgbaImage;
 use anyhow::Result;
+use image::RgbaImage;
 use log::warn;
 
 use crate::model::{Effect, EffectType, ResolvedLayer};
 
-pub mod exposure;
+pub mod blink;
 pub mod brightness_contrast;
-pub mod hsl;
 pub mod color_tint;
-pub mod vignette;
+pub mod exposure;
+pub mod fade;
 pub mod find_edges;
-pub mod highlight_shadow;
+pub mod gaussian_blur;
 pub mod gradient_overlay;
+pub mod highlight_shadow;
+pub mod hsl;
+pub mod lens_blur;
+pub mod lift;
 pub mod luma_key;
-pub mod tile;
+pub mod motion_blur;
 pub mod offset;
+pub mod sharpen;
 pub mod stretch_segment;
 pub mod swirl;
-pub mod gaussian_blur;
-pub mod lens_blur;
-pub mod sharpen;
-pub mod lift;
+pub mod tile;
 pub mod transform;
-pub mod fade;
-pub mod blink;
-pub mod motion_blur;
+pub mod vignette;
 
 pub use transform::apply_transform_effects;
 
@@ -37,7 +37,10 @@ pub fn apply_pixel_effects(
     let mut img = img;
 
     for effect in effects {
-        if disabled_effects.iter().any(|d| d == effect.effect_type.type_name()) {
+        if disabled_effects
+            .iter()
+            .any(|d| d == effect.effect_type.type_name())
+        {
             continue;
         }
         img = match &effect.effect_type {
@@ -74,7 +77,11 @@ pub fn apply_pixel_effects(
             }
             EffectType::BrightnessContrast(params) => {
                 if params.brightness.abs() > 0.001 || params.contrast.abs() > 0.001 {
-                    brightness_contrast::apply_brightness_contrast(img, params.brightness, params.contrast)
+                    brightness_contrast::apply_brightness_contrast(
+                        img,
+                        params.brightness,
+                        params.contrast,
+                    )
                 } else {
                     img
                 }
@@ -96,7 +103,11 @@ pub fn apply_pixel_effects(
             EffectType::StretchSegment(params) => {
                 if params.stretch.abs() > 0.5 {
                     stretch_segment::apply_stretch_segment(
-                        img, params.angle, params.stretch, params.offset, params.smooth,
+                        img,
+                        params.angle,
+                        params.stretch,
+                        params.offset,
+                        params.smooth,
                     )
                 } else {
                     img
@@ -117,11 +128,11 @@ pub fn apply_pixel_effects(
                 }
             }
             EffectType::Tile(params) => {
-                if params.scale > 1.01 || params.angle.abs() > 0.001 {
-                    tile::apply_tile(
-                        img, params.scale, params.phase, params.vert_offset,
-                        params.mirror, params.angle,
-                    )
+                let scale = params.scale.evaluate(layer.normalized_t);
+                let phase = params.phase.evaluate(layer.normalized_t);
+                let angle = params.angle.evaluate(layer.normalized_t);
+                if (scale - 1.0).abs() > 0.01 || angle.abs() > 0.001 {
+                    tile::apply_tile(img, scale, phase, params.vert_offset, params.mirror, angle)
                 } else {
                     img
                 }
@@ -129,11 +140,14 @@ pub fn apply_pixel_effects(
             EffectType::HighlightShadow(params) => {
                 highlight_shadow::apply_highlight_shadow(img, params.highlights, params.shadows)
             }
-            EffectType::GradientOverlay(params) => {
-                gradient_overlay::apply_gradient_overlay(
-                    img, params.alpha, params.color1, params.color2, params.offset, params.scale,
-                )
-            }
+            EffectType::GradientOverlay(params) => gradient_overlay::apply_gradient_overlay(
+                img,
+                params.alpha,
+                params.color1,
+                params.color2,
+                params.offset,
+                params.scale,
+            ),
             EffectType::LumaKey(params) => {
                 let low = params.low_threshold.evaluate(layer.normalized_t);
                 let high = params.high_threshold.evaluate(layer.normalized_t);
@@ -154,7 +168,10 @@ pub fn apply_pixel_effects(
                 motion_blur::apply_motion_blur(img, tune, layer.time_secs, layer.location)
             }
             // Transform effects handled separately via apply_transform_effects / timeline
-            EffectType::Oscillate(_) | EffectType::Swing(_) | EffectType::RandomDisplace(_) | EffectType::Spin(_) => img,
+            EffectType::Oscillate(_)
+            | EffectType::Swing(_)
+            | EffectType::RandomDisplace(_)
+            | EffectType::Spin(_) => img,
             // Lift handled separately in create_layer_source
             EffectType::Lift(_) => img,
             // Fade handled separately in resolve_layer

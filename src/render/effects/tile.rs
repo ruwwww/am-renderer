@@ -95,3 +95,36 @@ pub fn apply_tile(
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::Rgba;
+
+    #[test]
+    fn test_apply_tile_identity() {
+        let mut img = RgbaImage::new(4, 4);
+        for y in 0..4 {
+            for x in 0..4 {
+                img.put_pixel(x, y, Rgba([x as u8 * 50, y as u8 * 50, 0, 255]));
+            }
+        }
+
+        let tiled = apply_tile(img.clone(), 1.0, 0.0, false, false, 0.0);
+        assert_eq!(tiled.width(), 4);
+        assert_eq!(tiled.height(), 4);
+    }
+
+    #[test]
+    fn test_apply_tile_mirror() {
+        let mut img = RgbaImage::new(2, 2);
+        img.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
+        img.put_pixel(1, 0, Rgba([0, 255, 0, 255]));
+        img.put_pixel(0, 1, Rgba([0, 0, 255, 255]));
+        img.put_pixel(1, 1, Rgba([255, 255, 255, 255]));
+
+        let tiled = apply_tile(img.clone(), 2.0, 0.0, false, true, 0.0);
+        assert_eq!(tiled.width(), 2);
+        assert_eq!(tiled.height(), 2);
+    }
+}

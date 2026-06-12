@@ -263,23 +263,23 @@ pub struct TileParams {
     /// Whether tiles are mirrored at boundaries.
     pub mirror: bool,
     /// Tile scale factor.
-    pub scale: f32,
+    pub scale: Animated<f32>,
     /// Tile phase offset.
-    pub phase: f32,
+    pub phase: Animated<f32>,
     /// Whether vertical offset alternation is applied.
     pub vert_offset: bool,
     /// Tile rotation angle in degrees.
-    pub angle: f32,
+    pub angle: Animated<f32>,
 }
 
 impl Default for TileParams {
     fn default() -> Self {
         Self {
             mirror: false,
-            scale: 1.0,
-            phase: 0.0,
+            scale: Animated::Static(1.0),
+            phase: Animated::Static(0.0),
             vert_offset: false,
-            angle: 0.0,
+            angle: Animated::Static(0.0),
         }
     }
 }
@@ -615,4 +615,3 @@ impl Default for SwirlParams {
         }
     }
 }
-

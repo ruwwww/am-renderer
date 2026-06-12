@@ -33,7 +33,10 @@ use std::path::Path;
 use shape::create_base_shape_source;
 use utils::to_rgba_u8;
 
-fn calculate_viewport_bounds(scene: &ResolvedScene, disabled_effects: &[String]) -> (f32, f32, f32, f32) {
+fn calculate_viewport_bounds(
+    scene: &ResolvedScene,
+    disabled_effects: &[String],
+) -> (f32, f32, f32, f32) {
     let scene_w = scene.width as f32;
     let scene_h = scene.height as f32;
 
@@ -169,8 +172,12 @@ pub fn render_scene(
             debug_layout,
             disabled_effects,
         ) {
-            warn!("Failed to render layer '{}' (id={}): {}",
-                  layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
+            warn!(
+                "Failed to render layer '{}' (id={}): {}",
+                layer.label.as_deref().unwrap_or("unnamed"),
+                layer.id,
+                e
+            );
         }
     }
 
@@ -182,7 +189,12 @@ pub fn render_scene(
             if comp_pixel[3] > 0 {
                 let canvas_pixel = *canvas.get_pixel(x, y);
                 // Blend with Normal mode at 1.0 opacity
-                let blended = blend_pixel(canvas_pixel, comp_pixel, crate::model::BlendMode::Normal, 1.0);
+                let blended = blend_pixel(
+                    canvas_pixel,
+                    comp_pixel,
+                    crate::model::BlendMode::Normal,
+                    1.0,
+                );
                 canvas.put_pixel(x, y, blended);
             }
         }
@@ -208,12 +220,34 @@ pub fn render_scene(
         }
 
         // Draw light gray outline around the canvas boundaries on top of everything
-        draw_rect(&mut canvas, x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32, Rgba([200, 200, 200, 255]));
+        draw_rect(
+            &mut canvas,
+            x0 as i32,
+            y0 as i32,
+            (x1 - x0) as i32,
+            (y1 - y0) as i32,
+            Rgba([200, 200, 200, 255]),
+        );
         // Label the canvas boundary on top of everything
-        draw_text(&mut canvas, x0 as i32 + 10, y0 as i32 + 10, "CANVAS FRAME BOUNDARY", Rgba([200, 200, 200, 255]), 2);
+        draw_text(
+            &mut canvas,
+            x0 as i32 + 10,
+            y0 as i32 + 10,
+            "CANVAS FRAME BOUNDARY",
+            Rgba([200, 200, 200, 255]),
+            2,
+        );
 
         for layer in &scene.layers {
-            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height, viewport_xmin, viewport_ymin, disabled_effects);
+            draw_layer_debug_outline(
+                &mut canvas,
+                layer,
+                scene.width,
+                scene.height,
+                viewport_xmin,
+                viewport_ymin,
+                disabled_effects,
+            );
         }
     }
 
@@ -274,13 +308,23 @@ fn render_layer(
     let inv = match invert_transform(&fwd) {
         Some(m) => m,
         None => {
-            debug!("Layer '{}' has singular transform, skipping", layer.label.as_deref().unwrap_or("unnamed"));
+            debug!(
+                "Layer '{}' has singular transform, skipping",
+                layer.label.as_deref().unwrap_or("unnamed")
+            );
             return Ok(());
         }
     };
 
     // Get the source image/buffer for this layer
-    let source = create_layer_source(layer, image_cache, assets_dir, canvas, &fwd, disabled_effects)?;
+    let source = create_layer_source(
+        layer,
+        image_cache,
+        assets_dir,
+        canvas,
+        &fwd,
+        disabled_effects,
+    )?;
     let src_w = source.width() as f32;
     let src_h = source.height() as f32;
 
@@ -290,14 +334,20 @@ fn render_layer(
 
     // --- Precompute per-fill-mode mapping constants (done once, outside loop) ---
     let fill_scale = match layer.media_fill_mode.as_deref() {
-        Some("fit")  => (layer_w / src_w).min(layer_h / src_h),
+        Some("fit") => (layer_w / src_w).min(layer_h / src_h),
         Some("fill") => (layer_w / src_w).max(layer_h / src_h),
-        _            => 1.0,
+        _ => 1.0,
     };
     let (fill_off_x, fill_off_y) = match layer.media_fill_mode.as_deref() {
-        Some("fit")  => ((layer_w - src_w * fill_scale) / 2.0, (layer_h - src_h * fill_scale) / 2.0),
-        Some("fill") => (-((src_w * fill_scale - layer_w) / 2.0), -((src_h * fill_scale - layer_h) / 2.0)),
-        _            => (0.0, 0.0),
+        Some("fit") => (
+            (layer_w - src_w * fill_scale) / 2.0,
+            (layer_h - src_h * fill_scale) / 2.0,
+        ),
+        Some("fill") => (
+            -((src_w * fill_scale - layer_w) / 2.0),
+            -((src_h * fill_scale - layer_h) / 2.0),
+        ),
+        _ => (0.0, 0.0),
     };
     let media_fill_mode = layer.media_fill_mode.as_deref().unwrap_or("");
 
@@ -319,7 +369,9 @@ fn render_layer(
 
     // Find if there is a post-transform Swirl effect (locallyApplied = false)
     let post_swirl = layer.effects.iter().find(|e| {
-        !disabled_effects.iter().any(|d| d == e.effect_type.type_name())
+        !disabled_effects
+            .iter()
+            .any(|d| d == e.effect_type.type_name())
             && !e.locally_applied
             && matches!(e.effect_type, crate::model::EffectType::Swirl(_))
     });
@@ -327,12 +379,35 @@ fn render_layer(
     let post_swirl_params = if let Some(crate::model::Effect {
         effect_type: crate::model::EffectType::Swirl(ref params),
         ..
-    }) = post_swirl {
+    }) = post_swirl
+    {
         if params.strength.abs() > 0.001 {
             Some(params)
         } else {
             None
         }
+    } else {
+        None
+    };
+
+    // Find if there is a post-transform Tile effect (locallyApplied = false)
+    let post_tile = layer.effects.iter().find(|e| {
+        !disabled_effects
+            .iter()
+            .any(|d| d == e.effect_type.type_name())
+            && !e.locally_applied
+            && matches!(e.effect_type, crate::model::EffectType::Tile(_))
+    });
+
+    let post_tile_params = if let Some(crate::model::Effect {
+        effect_type: crate::model::EffectType::Tile(ref params),
+        ..
+    }) = post_tile
+    {
+        let scale = params.scale.evaluate(layer.normalized_t);
+        let phase = params.phase.evaluate(layer.normalized_t);
+        let angle = params.angle.evaluate(layer.normalized_t);
+        Some((scale, phase, params.vert_offset, params.mirror, angle))
     } else {
         None
     };
@@ -377,34 +452,86 @@ fn render_layer(
                     (lx, ly)
                 };
 
-                if lx_raw < 0.0 || lx_raw >= layer_w || ly_raw < 0.0 || ly_raw >= layer_h {
+                let (lx_tiled, ly_tiled) =
+                    if let Some((scale, phase, vert_offset, mirror, angle)) = post_tile_params {
+                        if scale <= 0.0 {
+                            (lx_raw, ly_raw)
+                        } else {
+                            let tx = (lx_raw / layer_w) * scale;
+                            let ty = (ly_raw / layer_h) * scale;
+
+                            let col = tx.floor() as i32;
+                            let row_t = ty.floor() as i32;
+                            let mut fx = tx.fract();
+                            let mut fy = ty.fract();
+
+                            if fx < 0.0 {
+                                fx += 1.0;
+                            }
+                            if fy < 0.0 {
+                                fy += 1.0;
+                            }
+
+                            if phase != 0.0 {
+                                if vert_offset {
+                                    if col.rem_euclid(2) == 1 {
+                                        fy = (fy + phase).rem_euclid(1.0);
+                                    }
+                                } else if row_t.rem_euclid(2) == 1 {
+                                    fx = (fx + phase).rem_euclid(1.0);
+                                }
+                            }
+
+                            if mirror {
+                                if col.rem_euclid(2) == 1 {
+                                    fx = 1.0 - fx;
+                                }
+                                if row_t.rem_euclid(2) == 1 {
+                                    fy = 1.0 - fy;
+                                }
+                            }
+
+                            if angle.abs() > 0.001 {
+                                let angle_rad = angle.to_radians();
+                                let cos_a = angle_rad.cos();
+                                let sin_a = angle_rad.sin();
+                                let rfx = fx - 0.5;
+                                let rfy = fy - 0.5;
+                                fx = (cos_a * rfx - sin_a * rfy + 0.5).rem_euclid(1.0);
+                                fy = (sin_a * rfx + cos_a * rfy + 0.5).rem_euclid(1.0);
+                            }
+
+                            (fx * layer_w, fy * layer_h)
+                        }
+                    } else {
+                        (lx_raw, ly_raw)
+                    };
+
+                if lx_tiled < 0.0 || lx_tiled >= layer_w || ly_tiled < 0.0 || ly_tiled >= layer_h {
                     continue;
                 }
 
                 let (sx, sy) = match media_fill_mode {
                     "fit" => {
-                        let sx_f = (lx_raw - fill_off_x) / fill_scale;
-                        let sy_f = (ly_raw - fill_off_y) / fill_scale;
+                        let sx_f = (lx_tiled - fill_off_x) / fill_scale;
+                        let sy_f = (ly_tiled - fill_off_y) / fill_scale;
                         if sx_f < 0.0 || sx_f >= src_w || sy_f < 0.0 || sy_f >= src_h {
                             continue;
                         }
                         (sx_f as u32, sy_f as u32)
                     }
                     "fill" => {
-                        let sx_f = (lx_raw - fill_off_x) / fill_scale;
-                        let sy_f = (ly_raw - fill_off_y) / fill_scale;
+                        let sx_f = (lx_tiled - fill_off_x) / fill_scale;
+                        let sy_f = (ly_tiled - fill_off_y) / fill_scale;
                         (
                             (sx_f as u32).min(source.width() - 1),
                             (sy_f as u32).min(source.height() - 1),
                         )
                     }
                     _ => {
-                        let sx = (lx_raw / layer_w * src_w) as u32;
-                        let sy = (ly_raw / layer_h * src_h) as u32;
-                        (
-                            sx.min(source.width() - 1),
-                            sy.min(source.height() - 1),
-                        )
+                        let sx = (lx_tiled / layer_w * src_w) as u32;
+                        let sy = (ly_tiled / layer_h * src_h) as u32;
+                        (sx.min(source.width() - 1), sy.min(source.height() - 1))
                     }
                 };
 
@@ -444,8 +571,16 @@ fn create_layer_source(
     let scale_y = layer.scale[1].abs();
 
     let lift_disabled = disabled_effects.iter().any(|d| d == "Lift");
-    let has_lift = !lift_disabled && layer.effects.iter().any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
-    let has_effects = layer.effects.iter().any(|e| !disabled_effects.iter().any(|d| d == e.effect_type.type_name()));
+    let has_lift = !lift_disabled
+        && layer
+            .effects
+            .iter()
+            .any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
+    let has_effects = layer.effects.iter().any(|e| {
+        !disabled_effects
+            .iter()
+            .any(|d| d == e.effect_type.type_name())
+    });
 
     let (w, h) = if (has_lift || has_effects) && layer.fill_type != FillType::Media {
         let w_scaled = (layer.size[0] * scale_x).max(1.0).round() as u32;
@@ -456,7 +591,9 @@ fn create_layer_source(
     };
 
     let mut img = if has_lift {
-        let lift_params = layer.effects.iter()
+        let lift_params = layer
+            .effects
+            .iter()
             .find_map(|e| {
                 if let crate::model::EffectType::Lift(ref params) = e.effect_type {
                     Some(params)
@@ -467,17 +604,103 @@ fn create_layer_source(
             .expect("Lift effect already confirmed");
 
         let shape_img = if lift_params.fill > 0.0 {
-            Some(create_base_shape_source(layer, w, h, image_cache, assets_dir)?)
+            Some(create_base_shape_source(
+                layer,
+                w,
+                h,
+                image_cache,
+                assets_dir,
+            )?)
         } else {
             None
         };
 
-        apply_lift(w, h, layer.size[0], layer.size[1], lift_params.fill, shape_img, canvas, fwd)?
+        apply_lift(
+            w,
+            h,
+            layer.size[0],
+            layer.size[1],
+            lift_params.fill,
+            shape_img,
+            canvas,
+            fwd,
+        )?
     } else {
         create_base_shape_source(layer, w, h, image_cache, assets_dir)?
     };
 
-    img = crate::render::effects::apply_pixel_effects(&layer.effects, img, layer, disabled_effects)?;
+    img =
+        crate::render::effects::apply_pixel_effects(&layer.effects, img, layer, disabled_effects)?;
 
     Ok(img)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::animation::Animated;
+    use crate::model::effect::TileParams;
+    use crate::model::layer::{BlendMode, FillType};
+    use crate::model::{Effect, EffectType};
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_post_transform_tile() {
+        // Create a 200x200 canvas (initially transparent)
+        let mut canvas = RgbaImage::new(200, 200);
+
+        // Define a 100x100 solid red layer at the center (100, 100)
+        let layer = ResolvedLayer {
+            id: 1,
+            label: Some("test_layer".to_string()),
+            location: [100.0, 100.0, 0.0],
+            scale: [1.0, 1.0],
+            rotation: 0.0,
+            opacity: 1.0,
+            fill_type: FillType::Color,
+            fill_image: None,
+            fill_color: [1.0, 0.0, 0.0, 1.0], // Red
+            gradient: None,
+            blend_mode: BlendMode::Normal,
+            media_fill_mode: None,
+            effects: vec![Effect {
+                effect_type: EffectType::Tile(TileParams {
+                    mirror: false,
+                    scale: Animated::Static(1.0),
+                    phase: Animated::Static(0.0),
+                    vert_offset: false,
+                    angle: Animated::Static(0.0),
+                }),
+                locally_applied: false, // Post-transform!
+            }],
+            size: [100.0, 100.0],
+            s: Some(".rect".to_string()),
+            time_secs: 0.0,
+            normalized_t: 0.0,
+        };
+
+        let mut cache = ImageCache::new();
+        let assets_dir = PathBuf::from("assets");
+
+        render_layer(
+            &mut canvas,
+            &layer,
+            &mut cache,
+            &assets_dir,
+            200,
+            200,
+            0.0,
+            0.0,
+            false,
+            &[],
+        )
+        .unwrap();
+
+        // Since post-transform Tile is active with scale=1.0 and mirror=false,
+        // the entire canvas should be tiled with red, meaning every pixel is red!
+        assert_eq!(canvas.get_pixel(0, 0)[0], 255); // Red channel should be 255
+        assert_eq!(canvas.get_pixel(0, 0)[3], 255); // Alpha channel should be 255
+        assert_eq!(canvas.get_pixel(199, 199)[0], 255);
+        assert_eq!(canvas.get_pixel(199, 199)[3], 255);
+    }
 }

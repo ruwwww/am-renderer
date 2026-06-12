@@ -1,12 +1,12 @@
 //! XML-to-domain-model converter for the Alight Motion renderer.
 
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
-use crate::parser::types::*;
 use crate::model::effect::*;
 use crate::model::*;
+use crate::parser::types::*;
 use crate::render::parse_hex_color;
 
 pub fn convert_project(xml: &XmlScene) -> Result<Project> {
@@ -157,7 +157,11 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
         // Multiply by coord_scale to convert to pixel dimensions.
         let size = [raw_size[0] * coord_scale, raw_size[1] * coord_scale];
 
-        let effects = shape.effects.iter().map(|e| convert_effect(e, coord_scale)).collect();
+        let effects = shape
+            .effects
+            .iter()
+            .map(|e| convert_effect(e, coord_scale))
+            .collect();
 
         layers.push(Layer {
             id,
@@ -223,7 +227,11 @@ fn parse_easing(s: Option<&str>) -> EasingType {
         return EasingType::Linear;
     }
     let parts: Vec<&str> = s.split_whitespace().collect();
-    let start_idx = if parts.first() == Some(&"local") { 1 } else { 0 };
+    let start_idx = if parts.first() == Some(&"local") {
+        1
+    } else {
+        0
+    };
     if parts.get(start_idx) == Some(&"cubicBezier") && parts.len() >= start_idx + 5 {
         let x1 = parts[start_idx + 1].parse().unwrap_or(0.0);
         let y1 = parts[start_idx + 2].parse().unwrap_or(0.0);
@@ -463,10 +471,10 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         }
         "com.alightcreative.effects.tile" => EffectType::Tile(TileParams {
             mirror: get_prop_bool(props, "mirror", false),
-            scale: get_prop_float(props, "scale", 1.0),
-            phase: get_prop_float(props, "phase", 0.0),
+            scale: get_prop_animated_float(props, "scale", 1.0),
+            phase: get_prop_animated_float(props, "phase", 0.0),
             vert_offset: get_prop_bool(props, "vertoffs", false),
-            angle: get_prop_float(props, "angle", 0.0),
+            angle: get_prop_animated_float(props, "angle", 0.0),
         }),
         "com.alightcreative.effects.exposure" => EffectType::Exposure(ExposureParams {
             exposure: get_prop_animated_float(props, "exposure", 0.0),
@@ -508,7 +516,11 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
             strength: get_prop_float(props, "strength", 0.5),
         }),
         "com.alightcreative.effects.gaussianblur" => EffectType::GaussianBlur(GaussianBlurParams {
-            radius: get_prop_float(props, "radius", get_prop_float(props, "strength", 0.05) * 100.0) * coord_scale,
+            radius: get_prop_float(
+                props,
+                "radius",
+                get_prop_float(props, "strength", 0.05) * 100.0,
+            ) * coord_scale,
         }),
         "com.alightcreative.effects.lensblur" => EffectType::LensBlur(LensBlurParams {
             radius: get_prop_float(props, "radius", 5.0) * coord_scale,
@@ -543,13 +555,18 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
             threshold: get_prop_float(props, "threshold", 1.0),
             invert: get_prop_bool(props, "invert", true),
         }),
-        "com.alightcreative.effects.stretchsegment" => EffectType::StretchSegment(StretchSegmentParams {
-            angle: get_prop_float(props, "angle", 0.0),
-            stretch: get_prop_float(props, "stretch", 0.0),
-            offset: get_prop_float(props, "offset", 0.0),
-            smooth: get_prop_float(props, "smooth", 0.0),
-        }),
-        "com.alightcreative.effects.swirl4" | "com.alightcreative.effects.swirl3" | "com.alightcreative.effects.swirl2" | "com.alightcreative.effects.swirl" => {
+        "com.alightcreative.effects.stretchsegment" => {
+            EffectType::StretchSegment(StretchSegmentParams {
+                angle: get_prop_float(props, "angle", 0.0),
+                stretch: get_prop_float(props, "stretch", 0.0),
+                offset: get_prop_float(props, "offset", 0.0),
+                smooth: get_prop_float(props, "smooth", 0.0),
+            })
+        }
+        "com.alightcreative.effects.swirl4"
+        | "com.alightcreative.effects.swirl3"
+        | "com.alightcreative.effects.swirl2"
+        | "com.alightcreative.effects.swirl" => {
             let exponent = match xml.id.as_str() {
                 "com.alightcreative.effects.swirl2" => 2,
                 "com.alightcreative.effects.swirl3" => 3,
@@ -590,7 +607,11 @@ pub fn build_virtual_mappings(
         }
     }
     for m in &project.media {
-        let is_audio = m.mime_type.as_deref().map(|t| t.starts_with("audio/")).unwrap_or(false)
+        let is_audio = m
+            .mime_type
+            .as_deref()
+            .map(|t| t.starts_with("audio/"))
+            .unwrap_or(false)
             || m.uri.ends_with(".mp3")
             || m.uri.ends_with(".wav")
             || m.uri.ends_with(".m4a");
