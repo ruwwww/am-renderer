@@ -4,6 +4,9 @@
 
 pub mod types;
 pub mod xml;
+pub mod converter;
 
 pub use types::*;
 pub use xml::parse_xml;
+pub use converter::{convert_project, build_virtual_mappings};
+

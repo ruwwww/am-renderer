@@ -3,17 +3,12 @@
 ## `src/lib.rs`
 Library root. Re-exports the five top-level modules: `parser`, `model`, `eval`, `render`, `export`.
 
-## `src/main.rs` (909 lines)
-CLI entry point and XML-to-model converter.
+## `src/main.rs`
+CLI entry point.
 
 **CLI Commands:**
 - `am-renderer info -i <file>` - Print project metadata
 - `am-renderer render -i <file> -a <assets> -o <output>` - Render frame(s)/video
-
-**Key functions:**
-- `convert_project(xml) -> Project` - Converts raw XML types to domain model
-- `convert_effect(xml_effect) -> Effect` - Maps 25+ XML effect IDs to `EffectType` variants
-- `build_virtual_mappings()` - Auto-pairs media URIs to asset files via round-robin
 
 ## `src/parser/` — XML Deserialization
 
@@ -35,6 +30,12 @@ All XML attribute mappings use `#[serde(rename = "@attr_name")]`.
 ### `xml.rs` (272 lines)
 - `parse_xml(path: &Path) -> Result<XmlScene>` — Reads and deserializes an XML file
 - 4 unit tests covering: minimal scene, full scene, static transform children, multi-layer with audio/media
+
+### `converter.rs` (629 lines)
+XML-to-domain-model converter:
+- `convert_project(xml) -> Result<Project>` - Converts raw XML types to domain model
+- `convert_effect(xml_effect) -> Effect` - Maps 25+ XML effect IDs to `EffectType` variants
+- `build_virtual_mappings()` - Auto-pairs media URIs to asset files via round-robin
 
 ## `src/model/` — Domain Model
 
@@ -93,18 +94,23 @@ Transform-modifying effects (Oscillate, Swing, RandomDisplace) were moved to `re
 ### `mod.rs`
 Module declarations.
 
-### `compositor.rs` (907 lines)
+### `compositor.rs` (740 lines)
 Core rendering engine:
-- `render_scene(project, resolved_scene, cache, debug) -> RgbaImage` — Creates canvas, fills background, composites layers bottom-to-top
-- `render_layer(layer, cache, bg, debug) -> RgbaImage` — Renders single layer:
+- `render_scene(project, resolved_scene, cache, debug, disabled_effects) -> RgbaImage` — Creates canvas, fills background, composites layers bottom-to-top, and handles adaptive viewport calculations for debug layout mode
+- `render_layer(layer, cache, bg, debug, disabled_effects) -> RgbaImage` — Renders single layer:
   - Handles FillType::Media (loads/stretches image), FillType::Color (solid fill), FillType::Gradient (linear gradient)
   - Uses inverse-transform sampling per pixel (parallelized with rayon)
   - Chains pixel-space effects
   - Supports Lift (Copy Background) with affine-stepped sampling
 - `ImageCache` — Virtual URI to file path mapping with `std::sync::Arc<Mutex<HashMap>>`
 - `parse_hex_color(hex) -> [f32;4]` — Converts hex color strings to RGBA
-- Debug layout mode: bounding boxes, pixel-font layer labels, edge detection overlays
 - Per-row parallelism: `.par_bridge()` on row iterator
+
+### `debug_layout.rs` (234 lines)
+Debug layout visualization utilities:
+- `draw_layer_debug_outline` - Draws bounding box outline, pivot crosshairs, and layer metadata label
+- `draw_line`, `draw_rect` - Custom line and rectangle rasterization
+- `draw_text`, `draw_text_with_bg`, `draw_char` - Custom pixel font rasterization (using embedded bitmasks)
 
 ### `blending.rs` (95 lines)
 - `blend_pixel(base, overlay, mode) -> Rgba` — Implements 8 blend modes using Porter-Duff "over" compositing

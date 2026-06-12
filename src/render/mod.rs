@@ -10,6 +10,8 @@ pub mod compositor;
 pub mod blending;
 pub mod effects;
 pub mod debug_effects;
+pub mod debug_layout;
 
 pub use compositor::{render_scene, ImageCache, parse_hex_color};
 pub use blending::blend_pixel;
+

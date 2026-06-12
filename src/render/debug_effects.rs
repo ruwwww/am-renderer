@@ -176,7 +176,7 @@ fn build_cumulative_tile(
     fn draw_label(img: &mut RgbaImage, x: u32, y: u32, text: &str, color: Rgba<u8>) {
         let mut cx = x;
         for c in text.chars() {
-            crate::render::compositor::draw_char(img, cx as i32, y as i32, c, color, 1);
+            crate::render::debug_layout::draw_char(img, cx as i32, y as i32, c, color, 1);
             cx += 4;
         }
     }

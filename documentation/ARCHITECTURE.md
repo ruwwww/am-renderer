@@ -9,7 +9,7 @@
 ```
 XML file  --[parser]--> XmlScene (raw serde types)
                              |
-                    [main.rs: convert_project]
+                    [parser::converter::convert_project]
                              |
               Project (domain model with Animated<T>)
                              |

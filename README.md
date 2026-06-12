@@ -41,7 +41,6 @@ cargo run --release -- render -i presets/preset1.xml -a assets -o output.mp4
 - [Effects Catalog](documentation/EFFECTS_CATALOG.md) — All supported effects with parameters
 - [CLI Reference](documentation/CLI_REFERENCE.md) — Command-line usage
 - [AI Agent Guide](documentation/AGENT_GUIDE.md) — Context for AI agents working with this codebase
-- [context.txt](context.txt) — Original design philosophy document
 
 ## License
 
