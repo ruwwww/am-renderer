@@ -42,7 +42,7 @@ XML <effect> params       →  effect.*                  (× coord_scale where a
 
 Animated properties are evaluated at the current time. Values pass through unchanged — no coordinate transforms.
 
-### 3. Resolved → Canvas (`render/compositor.rs`)
+### 3. Resolved → Canvas (`src/render/compositor/`)
 
 #### Layer source buffer creation (`create_layer_source`)
 

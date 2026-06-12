@@ -94,17 +94,21 @@ Transform-modifying effects (Oscillate, Swing, RandomDisplace) were moved to `re
 ### `mod.rs`
 Module declarations.
 
-### `compositor.rs` (740 lines)
-Core rendering engine:
-- `render_scene(project, resolved_scene, cache, debug, disabled_effects) -> RgbaImage` — Creates canvas, fills background, composites layers bottom-to-top, and handles adaptive viewport calculations for debug layout mode
-- `render_layer(layer, cache, bg, debug, disabled_effects) -> RgbaImage` — Renders single layer:
-  - Handles FillType::Media (loads/stretches image), FillType::Color (solid fill), FillType::Gradient (linear gradient)
-  - Uses inverse-transform sampling per pixel (parallelized with rayon)
-  - Chains pixel-space effects
-  - Supports Lift (Copy Background) with affine-stepped sampling
-- `ImageCache` — Virtual URI to file path mapping with `std::sync::Arc<Mutex<HashMap>>`
-- `parse_hex_color(hex) -> [f32;4]` — Converts hex color strings to RGBA
-- Per-row parallelism: `.par_bridge()` on row iterator
+### `compositor/` submodule directory
+Modularized rendering engine:
+- `mod.rs` — Core compositing loop and layer processing orchestration:
+  - `render_scene(...)` — Creates canvas, fills background, composites layers bottom-to-top, and handles adaptive viewport calculations for debug layout mode.
+  - `render_layer(...)` — Renders a single layer onto the canvas using inverse-transform sampling per pixel (parallelized using `rayon`'s `into_par_iter()`).
+  - `create_layer_source(...)` — Creates the source image buffer for a layer based on its fill type, applying Lift (Copy Background) and chaining pixel-space effects.
+- `cache.rs` — Image caching and loading logic:
+  - `ImageCache` — Virtual URI to physical file path mapping and thread-safe loading cache.
+- `shape.rs` — Geometry and basic shape source generation:
+  - `create_base_shape_source(...)` — Renders a base shape filled with color, gradient, or media, and handles geometry clipping (like `.circle` masking).
+- `gradient.rs` — Linear gradient rendering:
+  - `render_gradient(...)` — Renders linear gradients using color stop interpolation.
+- `utils.rs` — Color conversion and parsing:
+  - `parse_hex_color(...)` — Parses hex color strings in `#AARRGGBB` or `#RRGGBB` formats into `[f32; 4]`.
+  - `to_rgba_u8(...)` — Utility for converting `[f32; 4]` colors to `image::Rgba<u8>`.
 
 ### `debug_layout.rs` (234 lines)
 Debug layout visualization utilities:
