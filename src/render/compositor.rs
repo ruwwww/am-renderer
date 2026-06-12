@@ -130,10 +130,7 @@ pub fn render_scene(
             }
         }
 
-        // Draw light gray outline around the canvas boundaries
-        draw_rect(&mut canvas, x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32, Rgba([200, 200, 200, 255]));
-        // Label the canvas boundary
-        draw_text(&mut canvas, x0 as i32 + 10, y0 as i32 + 10, "CANVAS FRAME BOUNDARY", Rgba([200, 200, 200, 255]), 2);
+        // Canvas frame boundary outline and label will be drawn on top of layers at the end of rendering
     } else {
         // Fill with background color
         let bg = to_rgba_u8(scene.bg_color);
@@ -172,6 +169,33 @@ pub fn render_scene(
 
     // Second pass: Draw bounding box outlines & labels on top of everything
     if debug_layout {
+        let proj_w = scene.width as f32;
+        let proj_h = scene.height as f32;
+        let cx = canvas_w as f32 / 2.0;
+        let cy = canvas_h as f32 / 2.0;
+
+        let x0 = (cx - proj_w * 0.25) as u32;
+        let x1 = (cx + proj_w * 0.25) as u32;
+        let y0 = (cy - proj_h * 0.25) as u32;
+        let y1 = (cy + proj_h * 0.25) as u32;
+
+        // Apply a semi-transparent dark overlay (dimming by 60%) to everything outside the canvas boundaries
+        for y in 0..canvas_h {
+            for x in 0..canvas_w {
+                if x < x0 || x >= x1 || y < y0 || y >= y1 {
+                    let pixel = canvas.get_pixel_mut(x, y);
+                    pixel[0] = ((pixel[0] as u32 * 100) / 255) as u8;
+                    pixel[1] = ((pixel[1] as u32 * 100) / 255) as u8;
+                    pixel[2] = ((pixel[2] as u32 * 100) / 255) as u8;
+                }
+            }
+        }
+
+        // Draw light gray outline around the canvas boundaries on top of everything
+        draw_rect(&mut canvas, x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32, Rgba([200, 200, 200, 255]));
+        // Label the canvas boundary on top of everything
+        draw_text(&mut canvas, x0 as i32 + 10, y0 as i32 + 10, "CANVAS FRAME BOUNDARY", Rgba([200, 200, 200, 255]), 2);
+
         for layer in &scene.layers {
             draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height, disabled_effects);
         }
