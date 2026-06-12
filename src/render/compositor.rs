@@ -110,16 +110,16 @@ pub fn render_scene(
             *pixel = Rgba([26, 26, 26, 255]);
         }
 
-        // Draw canvas interior filled with project bg color (at 0.5x scale in center of expanded canvas)
+        // Draw canvas interior filled with project bg color (at 1.0x scale in center of expanded canvas)
         let proj_w = scene.width as f32;
         let proj_h = scene.height as f32;
         let cx = canvas_w as f32 / 2.0;
         let cy = canvas_h as f32 / 2.0;
 
-        let x0 = (cx - proj_w * 0.25) as u32;
-        let x1 = (cx + proj_w * 0.25) as u32;
-        let y0 = (cy - proj_h * 0.25) as u32;
-        let y1 = (cy + proj_h * 0.25) as u32;
+        let x0 = (cx - proj_w * 0.5) as u32;
+        let x1 = (cx + proj_w * 0.5) as u32;
+        let y0 = (cy - proj_h * 0.5) as u32;
+        let y1 = (cy + proj_h * 0.5) as u32;
 
         let project_bg = to_rgba_u8(scene.bg_color);
         for y in y0..y1 {
@@ -174,10 +174,10 @@ pub fn render_scene(
         let cx = canvas_w as f32 / 2.0;
         let cy = canvas_h as f32 / 2.0;
 
-        let x0 = (cx - proj_w * 0.25) as u32;
-        let x1 = (cx + proj_w * 0.25) as u32;
-        let y0 = (cy - proj_h * 0.25) as u32;
-        let y1 = (cy + proj_h * 0.25) as u32;
+        let x0 = (cx - proj_w * 0.5) as u32;
+        let x1 = (cx + proj_w * 0.5) as u32;
+        let y0 = (cy - proj_h * 0.5) as u32;
+        let y1 = (cy + proj_h * 0.5) as u32;
 
         // Apply a semi-transparent dark overlay (dimming by 60%) to everything outside the canvas boundaries
         for y in 0..canvas_h {
@@ -236,7 +236,7 @@ fn render_layer(
     }
 
     // Apply transform-modifying effects
-    let (mut location, mut scale, rotation) = apply_transform_effects(
+    let (mut location, scale, rotation) = apply_transform_effects(
         &layer.effects,
         layer.location,
         layer.scale,
@@ -248,10 +248,9 @@ fn render_layer(
 
     if debug_layout {
         let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
-        location[0] = (location[0] - proj_center[0]) * 0.5 + canvas_center[0];
-        location[1] = (location[1] - proj_center[1]) * 0.5 + canvas_center[1];
-        scale[0] *= 0.5;
-        scale[1] *= 0.5;
+        location[0] = (location[0] - proj_center[0]) + canvas_center[0];
+        location[1] = (location[1] - proj_center[1]) + canvas_center[1];
+        // Keep layers at their original resolution (1.0x) within the expanded canvas
     }
 
     // Build forward transform: layer-local → canvas coordinates
@@ -810,7 +809,7 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
     }
 
     // Apply transform-modifying effects
-    let (mut location, mut scale, rotation) = apply_transform_effects(
+    let (mut location, scale, rotation) = apply_transform_effects(
         &layer.effects,
         layer.location,
         layer.scale,
@@ -826,12 +825,11 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
     let cx_offset = location[0] - (scene_w as f32 / 2.0);
     let cy_offset = location[1] - (scene_h as f32 / 2.0);
 
-    // Scale locations and sizes by 0.5 and center them within expanded canvas
+    // Center locations within expanded canvas without scaling down
     let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
-    location[0] = (location[0] - proj_center[0]) * 0.5 + canvas_center[0];
-    location[1] = (location[1] - proj_center[1]) * 0.5 + canvas_center[1];
-    scale[0] *= 0.5;
-    scale[1] *= 0.5;
+    location[0] = (location[0] - proj_center[0]) + canvas_center[0];
+    location[1] = (location[1] - proj_center[1]) + canvas_center[1];
+    // Keep bounding outlines at their original resolution (1.0x) within the expanded canvas
 
     // Build forward transform: layer-local -> canvas coordinates
     let fwd = build_transform_matrix(location, scale, rotation, canvas_center);
