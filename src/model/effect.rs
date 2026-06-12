@@ -73,6 +73,38 @@ pub enum EffectType {
     Unknown(String),
 }
 
+impl EffectType {
+    /// Return the variant name as a static string, for use with config-based
+    /// effect filtering.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            EffectType::Oscillate(_) => "Oscillate",
+            EffectType::Swing(_) => "Swing",
+            EffectType::RandomDisplace(_) => "RandomDisplace",
+            EffectType::MotionBlur(_) => "MotionBlur",
+            EffectType::Blink(_) => "Blink",
+            EffectType::Fade(_) => "Fade",
+            EffectType::Tile(_) => "Tile",
+            EffectType::Exposure(_) => "Exposure",
+            EffectType::BrightnessContrast(_) => "BrightnessContrast",
+            EffectType::SaturationVibrance(_) => "SaturationVibrance",
+            EffectType::ColorTint(_) => "ColorTint",
+            EffectType::HighlightShadow(_) => "HighlightShadow",
+            EffectType::Vignette(_) => "Vignette",
+            EffectType::Sharpen(_) => "Sharpen",
+            EffectType::GaussianBlur(_) => "GaussianBlur",
+            EffectType::LensBlur(_) => "LensBlur",
+            EffectType::GradientOverlay(_) => "GradientOverlay",
+            EffectType::Lift(_) => "Lift",
+            EffectType::LumaKey(_) => "LumaKey",
+            EffectType::Offset(_) => "Offset",
+            EffectType::FindEdges(_) => "FindEdges",
+            EffectType::StretchSegment(_) => "StretchSegment",
+            EffectType::Unknown(_) => "Unknown",
+        }
+    }
+}
+
 /// A fully resolved effect attached to a layer.
 #[derive(Debug, Clone)]
 pub struct Effect {

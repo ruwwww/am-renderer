@@ -31,10 +31,14 @@ pub fn apply_pixel_effects(
     effects: &[Effect],
     img: RgbaImage,
     layer: &ResolvedLayer,
+    disabled_effects: &[String],
 ) -> Result<RgbaImage> {
     let mut img = img;
 
     for effect in effects {
+        if disabled_effects.iter().any(|d| d == effect.effect_type.type_name()) {
+            continue;
+        }
         img = match &effect.effect_type {
             EffectType::Exposure(params) => {
                 let exp = params.exposure.evaluate(layer.normalized_t);

@@ -16,6 +16,7 @@ struct RenderTask {
     scene: ResolvedScene,
     cache: ImageCache,
     assets_dir: PathBuf,
+    disabled_effects: Vec<String>,
 }
 
 /// Render debug views showing each effect independently and chain order variants.
@@ -25,6 +26,7 @@ pub fn render_effects_debug(
     assets_dir: &Path,
     frame_num: u32,
     output_dir: &Path,
+    disabled_effects: &[String],
 ) -> Result<()> {
     let debug_dir = output_dir.join(format!("{}_frame{:06}", DEBUG_SUBDIR, frame_num));
     std::fs::create_dir_all(&debug_dir)?;
@@ -37,6 +39,8 @@ pub fn render_effects_debug(
         let base_scene = scene.clone();
         let mut tasks: Vec<RenderTask> = Vec::new();
 
+        let de = disabled_effects.to_vec();
+
         // 1. No effects on this layer
         {
             let mut ms = base_scene.clone();
@@ -46,6 +50,7 @@ pub fn render_effects_debug(
                 scene: ms,
                 cache: image_cache.clone(),
                 assets_dir: assets_dir.to_path_buf(),
+                disabled_effects: de.clone(),
             });
         }
 
@@ -61,6 +66,7 @@ pub fn render_effects_debug(
                 scene: ms,
                 cache: image_cache.clone(),
                 assets_dir: assets_dir.to_path_buf(),
+                disabled_effects: de.clone(),
             });
         }
 
@@ -74,6 +80,7 @@ pub fn render_effects_debug(
                 scene: ms,
                 cache: image_cache.clone(),
                 assets_dir: assets_dir.to_path_buf(),
+                disabled_effects: de.clone(),
             });
         }
 
@@ -82,7 +89,7 @@ pub fn render_effects_debug(
             .par_iter()
             .map(|task| {
                 let mut cc = task.cache.clone();
-                let img = render_scene(&task.scene, &mut cc, &task.assets_dir, false)
+                let img = render_scene(&task.scene, &mut cc, &task.assets_dir, false, &task.disabled_effects)
                     .unwrap_or_else(|_| RgbaImage::new(1, 1));
                 (task.name.clone(), img)
             })
@@ -96,7 +103,7 @@ pub fn render_effects_debug(
         // 4. Cumulative chain tiled image
         if !layer.effects.is_empty() {
             let cumulative_img = build_cumulative_tile(
-                &base_scene, layer_idx, &layer.effects, image_cache, assets_dir,
+                &base_scene, layer_idx, &layer.effects, image_cache, assets_dir, disabled_effects,
             )?;
             let path = debug_dir.join(format!("layer{}_chain_cumulative.png", layer_idx));
             cumulative_img.save(&path)?;
@@ -113,6 +120,7 @@ fn build_cumulative_tile(
     effects: &[Effect],
     image_cache: &mut ImageCache,
     assets_dir: &Path,
+    disabled_effects: &[String],
 ) -> Result<RgbaImage> {
     let n = effects.len();
 
@@ -131,11 +139,12 @@ fn build_cumulative_tile(
         })
         .collect();
 
+    let de = disabled_effects.to_vec();
     let mut step_results: Vec<(usize, bool, RgbaImage)> = steps
         .par_iter()
         .map(|(count, is_top, scene)| {
             let mut cc = image_cache.clone();
-            let img = render_scene(scene, &mut cc, assets_dir, false)
+            let img = render_scene(scene, &mut cc, assets_dir, false, &de)
                 .unwrap_or_else(|_| RgbaImage::new(1, 1));
             (*count, *is_top, img)
         })

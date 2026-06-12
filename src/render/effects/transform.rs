@@ -7,12 +7,16 @@ pub fn apply_transform_effects(
     rotation: f32,
     time_secs: f32,
     normalized_t: f32,
+    disabled_effects: &[String],
 ) -> ([f32; 3], [f32; 2], f32) {
     let mut loc = location;
     let scl = scale;
     let mut rot = rotation;
 
     for effect in effects {
+        if disabled_effects.iter().any(|d| d == effect.effect_type.type_name()) {
+            continue;
+        }
         match &effect.effect_type {
             EffectType::Oscillate(params) => {
                 let freq = params.freq.evaluate(normalized_t);
@@ -81,9 +85,11 @@ mod tests {
         let scale = [1.0, 1.0];
         let rotation = 0.0;
 
-        let (loc0, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.0, 0.0);
-        let (loc_quarter, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.25, 0.25);
-        let (loc_half, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.5, 0.5);
+        let disabled = &[];
+
+        let (loc0, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.0, 0.0, disabled);
+        let (loc_quarter, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.25, 0.25, disabled);
+        let (loc_half, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.5, 0.5, disabled);
 
         assert_eq!(loc0[0], 0.0);
         assert!((loc_quarter[0] - 100.0).abs() < 1e-4);

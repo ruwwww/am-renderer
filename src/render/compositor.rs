@@ -95,6 +95,7 @@ pub fn render_scene(
     image_cache: &mut ImageCache,
     assets_dir: &Path,
     debug_layout: bool,
+    disabled_effects: &[String],
 ) -> Result<RgbaImage> {
     let (canvas_w, canvas_h) = if debug_layout {
         (scene.width * 2, scene.height * 2)
@@ -149,7 +150,7 @@ pub fn render_scene(
 
     // Composite layers bottom to top onto the composition canvas
     for layer in &scene.layers {
-        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, debug_layout) {
+        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, debug_layout, disabled_effects) {
             warn!("Failed to render layer '{}' (id={}): {}",
                   layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
         }
@@ -172,7 +173,7 @@ pub fn render_scene(
     // Second pass: Draw bounding box outlines & labels on top of everything
     if debug_layout {
         for layer in &scene.layers {
-            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height);
+            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height, disabled_effects);
         }
     }
 
@@ -190,6 +191,7 @@ fn render_layer(
     image_cache: &mut ImageCache,
     assets_dir: &Path,
     debug_layout: bool,
+    disabled_effects: &[String],
 ) -> Result<()> {
     // Skip fully transparent layers
     if layer.opacity < 1.0 / 255.0 {
@@ -215,6 +217,7 @@ fn render_layer(
         layer.rotation,
         layer.time_secs,
         layer.normalized_t,
+        disabled_effects,
     );
 
     if debug_layout {
@@ -235,7 +238,7 @@ fn render_layer(
     };
 
     // Get the source image/buffer for this layer
-    let source = create_layer_source(layer, image_cache, assets_dir, canvas, &fwd)?;
+    let source = create_layer_source(layer, image_cache, assets_dir, canvas, &fwd, disabled_effects)?;
     let src_w = source.width() as f32;
     let src_h = source.height() as f32;
 
@@ -391,12 +394,14 @@ fn create_layer_source(
     assets_dir: &Path,
     canvas: &RgbaImage,
     fwd: &[[f32; 3]; 3],
+    disabled_effects: &[String],
 ) -> Result<RgbaImage> {
     let scale_x = layer.scale[0].abs();
     let scale_y = layer.scale[1].abs();
 
-    let has_lift = layer.effects.iter().any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
-    let has_effects = !layer.effects.is_empty();
+    let lift_disabled = disabled_effects.iter().any(|d| d == "Lift");
+    let has_lift = !lift_disabled && layer.effects.iter().any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
+    let has_effects = layer.effects.iter().any(|e| !disabled_effects.iter().any(|d| d == e.effect_type.type_name()));
 
     let (w, h) = if (has_lift || has_effects) && layer.fill_type != FillType::Media {
         let w_scaled = (layer.size[0] * scale_x).max(1.0).round() as u32;
@@ -428,7 +433,7 @@ fn create_layer_source(
         create_base_shape_source(layer, w, h, image_cache, assets_dir)?
     };
 
-    img = crate::render::effects::apply_pixel_effects(&layer.effects, img, layer)?;
+    img = crate::render::effects::apply_pixel_effects(&layer.effects, img, layer, disabled_effects)?;
 
     Ok(img)
 }
@@ -750,7 +755,7 @@ pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: 
 }
 
 /// Draw outline bounding box and label for a layer (used in debug_layout mode)
-fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32) {
+fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32, disabled_effects: &[String]) {
     let canvas_w = canvas.width() as f32;
     let canvas_h = canvas.height() as f32;
     let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
@@ -770,6 +775,7 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
         layer.rotation,
         layer.time_secs,
         layer.normalized_t,
+        disabled_effects,
     );
 
     // Scale locations and sizes by 0.5 and center them within expanded canvas

@@ -34,6 +34,7 @@ pub fn export_sequence(
     end_frame: Option<u32>,
     cache: &mut ImageCache,
     debug_layout: bool,
+    disabled_effects: &[String],
 ) -> Result<()> {
     let start = start_frame.unwrap_or(0);
     let total_frames = project.total_frames();
@@ -53,6 +54,7 @@ pub fn export_sequence(
     std::fs::create_dir_all(output_dir)
         .with_context(|| format!("failed to create output directory: {}", output_dir.display()))?;
 
+    let de = disabled_effects.to_vec();
     // Render frames in parallel
     let results: Vec<Result<()>> = (start..end)
         .into_par_iter()
@@ -62,7 +64,7 @@ pub fn export_sequence(
 
             // Clone the pre-populated cache (extremely cheap, just increments Arc refs)
             let mut thread_cache = cache.clone();
-            let img = render_scene(&resolved, &mut thread_cache, assets_dir, debug_layout)
+            let img = render_scene(&resolved, &mut thread_cache, assets_dir, debug_layout, &de)
                 .with_context(|| format!("failed to render frame {}", frame))?;
 
             let path = output_dir.join(format!("frame_{:06}.png", frame));

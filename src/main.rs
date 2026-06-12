@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+use am_renderer::config::Config;
 use am_renderer::model::effect::*;
 use am_renderer::model::*;
 use am_renderer::parser::*;
@@ -62,6 +63,10 @@ enum Commands {
         /// effect chain from top-down/bottom-up.
         #[arg(long)]
         debug_effects: bool,
+
+        /// Path to a TOML config file for disabling effects.
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
     /// Print metadata information about the project.
     Info {
@@ -116,7 +121,15 @@ fn main() -> Result<()> {
             auto_pair,
             debug_layout,
             debug_effects,
+            config,
         } => {
+            let config: Config = config
+                .as_ref()
+                .map(|p| Config::from_file(p.as_ref()))
+                .transpose()?
+                .unwrap_or_default();
+            let disabled = config.disabled_effects_slice();
+
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
 
@@ -152,7 +165,7 @@ fn main() -> Result<()> {
                 if dump_graph {
                     print_render_graph(&resolved, f, time_secs);
                 }
-                let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets, debug_layout)?;
+                let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets, debug_layout, disabled)?;
 
                 let out_dir = if fmt == Format::Png {
                     output
@@ -161,7 +174,7 @@ fn main() -> Result<()> {
                 };
 
                 if debug_effects {
-                    render_effects_debug(&resolved, &mut cache, &assets, f, &out_dir)?;
+                    render_effects_debug(&resolved, &mut cache, &assets, f, &out_dir, disabled)?;
                     println!("Debug effects images saved to {}/debug_effects_frame{:06}", out_dir.display(), f);
                 }
 
@@ -175,7 +188,7 @@ fn main() -> Result<()> {
                 }
                 match fmt {
                     Format::Png => {
-                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache, debug_layout)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache, debug_layout, disabled)?;
                         println!("Successfully rendered sequence to {}", output.display());
                     }
                     Format::Mp4 => {
@@ -187,7 +200,7 @@ fn main() -> Result<()> {
                         std::fs::create_dir_all(&temp_dir)?;
 
                         println!("Rendering frames...");
-                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache, debug_layout)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache, debug_layout, disabled)?;
 
                         let video_w = if debug_layout { project.width * 2 } else { project.width };
                         let video_h = if debug_layout { project.height * 2 } else { project.height };
