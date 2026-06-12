@@ -90,6 +90,75 @@ impl ImageCache {
 ///
 /// # Returns
 /// The rendered RGBA image.
+fn calculate_viewport_bounds(scene: &ResolvedScene, disabled_effects: &[String]) -> (f32, f32, f32, f32) {
+    let scene_w = scene.width as f32;
+    let scene_h = scene.height as f32;
+
+    let mut viewport_xmin = -0.1 * scene_w;
+    let mut viewport_xmax = 1.1 * scene_w;
+    let mut viewport_ymin = -0.1 * scene_h;
+    let mut viewport_ymax = 1.1 * scene_h;
+
+    for layer in &scene.layers {
+        let layer_w = layer.size[0];
+        let layer_h = layer.size[1];
+        if layer_w <= 0.0 || layer_h <= 0.0 {
+            continue;
+        }
+
+        let (location, scale, rotation) = apply_transform_effects(
+            &layer.effects,
+            layer.location,
+            layer.scale,
+            layer.rotation,
+            layer.time_secs,
+            layer.normalized_t,
+            disabled_effects,
+        );
+
+        let proj_center = [scene_w / 2.0, scene_h / 2.0];
+        let fwd = build_transform_matrix(location, scale, rotation, proj_center);
+
+        let half_w = layer_w / 2.0;
+        let half_h = layer_h / 2.0;
+
+        let corners = [
+            transform_point(&fwd, [-half_w, -half_h]),
+            transform_point(&fwd, [half_w, -half_h]),
+            transform_point(&fwd, [half_w, half_h]),
+            transform_point(&fwd, [-half_w, half_h]),
+        ];
+
+        let mut l_xmin = corners[0][0];
+        let mut l_xmax = corners[0][0];
+        let mut l_ymin = corners[0][1];
+        let mut l_ymax = corners[0][1];
+
+        for c in &corners[1..] {
+            l_xmin = l_xmin.min(c[0]);
+            l_xmax = l_xmax.max(c[0]);
+            l_ymin = l_ymin.min(c[1]);
+            l_ymax = l_ymax.max(c[1]);
+        }
+
+        if l_xmin < 0.0 {
+            viewport_xmin = viewport_xmin.min(l_xmin - 0.2 * scene_w);
+        }
+        if l_xmax > scene_w {
+            viewport_xmax = viewport_xmax.max(l_xmax + 0.2 * scene_w);
+        }
+        if l_ymin < 0.0 {
+            viewport_ymin = viewport_ymin.min(l_ymin - 0.2 * scene_h);
+        }
+        if l_ymax > scene_h {
+            viewport_ymax = viewport_ymax.max(l_ymax + 0.2 * scene_h);
+        }
+    }
+
+    (viewport_xmin, viewport_xmax, viewport_ymin, viewport_ymax)
+}
+
+/// Renders a resolved scene to an RGBA image.
 pub fn render_scene(
     scene: &ResolvedScene,
     image_cache: &mut ImageCache,
@@ -97,11 +166,14 @@ pub fn render_scene(
     debug_layout: bool,
     disabled_effects: &[String],
 ) -> Result<RgbaImage> {
-    let (canvas_w, canvas_h) = if debug_layout {
-        (scene.width * 2, scene.height * 2)
+    let (viewport_xmin, viewport_xmax, viewport_ymin, viewport_ymax) = if debug_layout {
+        calculate_viewport_bounds(scene, disabled_effects)
     } else {
-        (scene.width, scene.height)
+        (0.0, scene.width as f32, 0.0, scene.height as f32)
     };
+
+    let canvas_w = (viewport_xmax - viewport_xmin).round() as u32;
+    let canvas_h = (viewport_ymax - viewport_ymin).round() as u32;
     let mut canvas = RgbaImage::new(canvas_w, canvas_h);
 
     if debug_layout {
@@ -111,15 +183,10 @@ pub fn render_scene(
         }
 
         // Draw canvas interior filled with project bg color (at 1.0x scale in center of expanded canvas)
-        let proj_w = scene.width as f32;
-        let proj_h = scene.height as f32;
-        let cx = canvas_w as f32 / 2.0;
-        let cy = canvas_h as f32 / 2.0;
-
-        let x0 = (cx - proj_w * 0.5) as u32;
-        let x1 = (cx + proj_w * 0.5) as u32;
-        let y0 = (cy - proj_h * 0.5) as u32;
-        let y1 = (cy + proj_h * 0.5) as u32;
+        let x0 = (-viewport_xmin).round() as u32;
+        let x1 = (scene.width as f32 - viewport_xmin).round() as u32;
+        let y0 = (-viewport_ymin).round() as u32;
+        let y1 = (scene.height as f32 - viewport_ymin).round() as u32;
 
         let project_bg = to_rgba_u8(scene.bg_color);
         for y in y0..y1 {
@@ -147,7 +214,18 @@ pub fn render_scene(
 
     // Composite layers bottom to top onto the composition canvas
     for layer in &scene.layers {
-        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, scene.width, scene.height, debug_layout, disabled_effects) {
+        if let Err(e) = render_layer(
+            &mut comp_canvas,
+            layer,
+            image_cache,
+            assets_dir,
+            scene.width,
+            scene.height,
+            viewport_xmin,
+            viewport_ymin,
+            debug_layout,
+            disabled_effects,
+        ) {
             warn!("Failed to render layer '{}' (id={}): {}",
                   layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
         }
@@ -169,15 +247,10 @@ pub fn render_scene(
 
     // Second pass: Draw bounding box outlines & labels on top of everything
     if debug_layout {
-        let proj_w = scene.width as f32;
-        let proj_h = scene.height as f32;
-        let cx = canvas_w as f32 / 2.0;
-        let cy = canvas_h as f32 / 2.0;
-
-        let x0 = (cx - proj_w * 0.5) as u32;
-        let x1 = (cx + proj_w * 0.5) as u32;
-        let y0 = (cy - proj_h * 0.5) as u32;
-        let y1 = (cy + proj_h * 0.5) as u32;
+        let x0 = (-viewport_xmin).round() as u32;
+        let x1 = (scene.width as f32 - viewport_xmin).round() as u32;
+        let y0 = (-viewport_ymin).round() as u32;
+        let y1 = (scene.height as f32 - viewport_ymin).round() as u32;
 
         // Apply a semi-transparent dark overlay (dimming by 60%) to everything outside the canvas boundaries
         for y in 0..canvas_h {
@@ -197,7 +270,7 @@ pub fn render_scene(
         draw_text(&mut canvas, x0 as i32 + 10, y0 as i32 + 10, "CANVAS FRAME BOUNDARY", Rgba([200, 200, 200, 255]), 2);
 
         for layer in &scene.layers {
-            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height, disabled_effects);
+            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height, viewport_xmin, viewport_ymin, disabled_effects);
         }
     }
 
@@ -214,8 +287,10 @@ fn render_layer(
     layer: &ResolvedLayer,
     image_cache: &mut ImageCache,
     assets_dir: &Path,
-    scene_w: u32,
-    scene_h: u32,
+    _scene_w: u32,
+    _scene_h: u32,
+    viewport_xmin: f32,
+    viewport_ymin: f32,
     debug_layout: bool,
     disabled_effects: &[String],
 ) -> Result<()> {
@@ -247,10 +322,8 @@ fn render_layer(
     );
 
     if debug_layout {
-        let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
-        location[0] = (location[0] - proj_center[0]) + canvas_center[0];
-        location[1] = (location[1] - proj_center[1]) + canvas_center[1];
-        // Keep layers at their original resolution (1.0x) within the expanded canvas
+        location[0] = location[0] - viewport_xmin;
+        location[1] = location[1] - viewport_ymin;
     }
 
     // Build forward transform: layer-local → canvas coordinates
@@ -796,7 +869,15 @@ pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: 
 }
 
 /// Draw outline bounding box and label for a layer (used in debug_layout mode)
-fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32, disabled_effects: &[String]) {
+fn draw_layer_debug_outline(
+    canvas: &mut RgbaImage,
+    layer: &ResolvedLayer,
+    scene_w: u32,
+    scene_h: u32,
+    viewport_xmin: f32,
+    viewport_ymin: f32,
+    disabled_effects: &[String],
+) {
     let canvas_w = canvas.width() as f32;
     let canvas_h = canvas.height() as f32;
     let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
@@ -825,11 +906,9 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
     let cx_offset = location[0] - (scene_w as f32 / 2.0);
     let cy_offset = location[1] - (scene_h as f32 / 2.0);
 
-    // Center locations within expanded canvas without scaling down
-    let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
-    location[0] = (location[0] - proj_center[0]) + canvas_center[0];
-    location[1] = (location[1] - proj_center[1]) + canvas_center[1];
-    // Keep bounding outlines at their original resolution (1.0x) within the expanded canvas
+    // Shift locations to match the adaptive viewport
+    location[0] = location[0] - viewport_xmin;
+    location[1] = location[1] - viewport_ymin;
 
     // Build forward transform: layer-local -> canvas coordinates
     let fwd = build_transform_matrix(location, scale, rotation, canvas_center);
