@@ -32,6 +32,7 @@ pub fn export_sequence(
     output_dir: &Path,
     start_frame: Option<u32>,
     end_frame: Option<u32>,
+    reindex: bool,
     cache: &mut ImageCache,
     debug_layout: bool,
     disabled_effects: &[String],
@@ -67,7 +68,8 @@ pub fn export_sequence(
             let img = render_scene(&resolved, &mut thread_cache, assets_dir, debug_layout, &de)
                 .with_context(|| format!("failed to render frame {}", frame))?;
 
-            let path = output_dir.join(format!("frame_{:06}.png", frame));
+            let file_index = if reindex { frame - start } else { frame };
+            let path = output_dir.join(format!("frame_{:06}.png", file_index));
             img.save(&path)
                 .with_context(|| format!("failed to save frame to: {}", path.display()))?;
             Ok(())

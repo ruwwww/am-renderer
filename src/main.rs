@@ -65,6 +65,22 @@ enum Commands {
         /// Path to a TOML config file for disabling effects.
         #[arg(long)]
         config: Option<PathBuf>,
+
+        /// Start frame of the range to render (inclusive).
+        #[arg(long)]
+        start_frame: Option<u32>,
+
+        /// End frame of the range to render (exclusive).
+        #[arg(long)]
+        end_frame: Option<u32>,
+
+        /// Start time of the range to render in seconds (inclusive).
+        #[arg(long)]
+        start_time: Option<f32>,
+
+        /// End time of the range to render in seconds (exclusive).
+        #[arg(long)]
+        end_time: Option<f32>,
     },
     /// Print metadata information about the project.
     Info {
@@ -120,6 +136,10 @@ fn main() -> Result<()> {
             debug_layout,
             debug_effects,
             config,
+            start_frame,
+            end_frame,
+            start_time,
+            end_time,
         } => {
             let config: Config = config
                 .as_ref()
@@ -130,6 +150,30 @@ fn main() -> Result<()> {
 
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
+
+            if frame.is_some() && (start_frame.is_some() || end_frame.is_some() || start_time.is_some() || end_time.is_some()) {
+                anyhow::bail!("Cannot specify range options (--start-frame, --end-frame, --start-time, --end-time) when rendering a single frame (--frame)");
+            }
+
+            let final_start_frame = match (start_frame, start_time) {
+                (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --start-frame and --start-time"),
+                (Some(sf), None) => Some(sf),
+                (None, Some(st)) => Some((st * project.fps).round() as u32),
+                (None, None) => None,
+            };
+
+            let final_end_frame = match (end_frame, end_time) {
+                (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --end-frame and --end-time"),
+                (Some(ef), None) => Some(ef),
+                (None, Some(et)) => Some((et * project.fps).round() as u32),
+                (None, None) => None,
+            };
+
+            if let (Some(start), Some(end)) = (final_start_frame, final_end_frame) {
+                if start >= end {
+                    anyhow::bail!("End frame/time must be greater than start frame/time (start frame: {}, end frame: {})", start, end);
+                }
+            }
 
             let fmt = match format {
                 Some(f) => f,
@@ -186,7 +230,7 @@ fn main() -> Result<()> {
                 }
                 match fmt {
                     Format::Png => {
-                        am_renderer::export::png::export_sequence(&project, &assets, &output, None, None, &mut cache, debug_layout, disabled)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &output, final_start_frame, final_end_frame, false, &mut cache, debug_layout, disabled)?;
                         println!("Successfully rendered sequence to {}", output.display());
                     }
                     Format::Mp4 => {
@@ -198,7 +242,7 @@ fn main() -> Result<()> {
                         std::fs::create_dir_all(&temp_dir)?;
 
                         println!("Rendering frames...");
-                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, None, None, &mut cache, debug_layout, disabled)?;
+                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, final_start_frame, final_end_frame, true, &mut cache, debug_layout, disabled)?;
 
                         let video_w = if debug_layout { project.width * 2 } else { project.width };
                         let video_h = if debug_layout { project.height * 2 } else { project.height };
