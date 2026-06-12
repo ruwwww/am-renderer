@@ -532,7 +532,7 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         "com.alightcreative.effects.offset" => EffectType::Offset(OffsetParams {
             offset: {
                 let raw_offset = get_prop_vec2(props, "offset", [0.0, 0.0]);
-                [raw_offset[0] * coord_scale, raw_offset[1] * coord_scale]
+                [raw_offset[0], raw_offset[1]]
             },
             feather: get_prop_float(props, "feather", 0.0),
             mask: get_prop_bool(props, "mask", false),
@@ -544,8 +544,8 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         }),
         "com.alightcreative.effects.stretchsegment" => EffectType::StretchSegment(StretchSegmentParams {
             angle: get_prop_float(props, "angle", 0.0),
-            stretch: get_prop_float(props, "stretch", 0.0) * coord_scale,
-            offset: get_prop_float(props, "offset", 0.0) * coord_scale,
+            stretch: get_prop_float(props, "stretch", 0.0),
+            offset: get_prop_float(props, "offset", 0.0),
             smooth: get_prop_float(props, "smooth", 0.0),
         }),
         other => EffectType::Unknown(other.to_string()),

@@ -28,19 +28,25 @@ pub fn apply_vignette(
     let feather = feather.max(0.001);
     let scale = scale.max(0.001);
 
+    let (rx, ry) = if cx < cy {
+        (cx, cy + (cx - cy) * roundness)
+    } else {
+        (cx + (cy - cx) * roundness, cy)
+    };
+    let rx = rx.max(1.0);
+    let ry = ry.max(1.0);
+
     raw.par_chunks_mut(stride)
         .enumerate()
         .for_each(|(y, row)| {
             let dy = y as f32 - cy;
-            let ny = dy.abs() / cy.max(1.0);
 
             for x in 0..w_u {
                 let dx = x as f32 - cx;
-                let nx = dx.abs() / cx.max(1.0);
 
-                let d_rect = nx.max(ny);
-                let d_circ = (nx * nx + ny * ny).sqrt();
-                let d = ((1.0 - roundness) * d_rect + roundness * d_circ) / scale.max(0.001);
+                let nx = dx / rx;
+                let ny = dy / ry;
+                let d = (nx * nx + ny * ny).sqrt() / scale;
 
                 let vignette = if d < 1.0 - feather {
                     1.0
