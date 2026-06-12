@@ -104,7 +104,7 @@ pub fn apply_pixel_effects(
             }
             EffectType::Swirl(params) => {
                 if params.strength.abs() > 0.001 {
-                    swirl::apply_swirl(img, params.strength, params.radius)
+                    swirl::apply_swirl(img, params.strength, params.radius, params.exponent)
                 } else {
                     img
                 }

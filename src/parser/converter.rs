@@ -549,10 +549,19 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
             offset: get_prop_float(props, "offset", 0.0),
             smooth: get_prop_float(props, "smooth", 0.0),
         }),
-        "com.alightcreative.effects.swirl4" | "com.alightcreative.effects.swirl" => EffectType::Swirl(SwirlParams {
-            strength: get_prop_float(props, "strength", 0.0),
-            radius: get_prop_float(props, "radius", 0.5),
-        }),
+        "com.alightcreative.effects.swirl4" | "com.alightcreative.effects.swirl3" | "com.alightcreative.effects.swirl2" | "com.alightcreative.effects.swirl" => {
+            let exponent = match xml.id.as_str() {
+                "com.alightcreative.effects.swirl2" => 2,
+                "com.alightcreative.effects.swirl3" => 3,
+                "com.alightcreative.effects.swirl4" => 4,
+                _ => 1,
+            };
+            EffectType::Swirl(SwirlParams {
+                strength: get_prop_float(props, "strength", 0.0),
+                radius: get_prop_float(props, "radius", 0.5),
+                exponent,
+            })
+        }
         "com.alightcreative.effects.spin" => EffectType::Spin(SpinParams {
             rpm: get_prop_animated_float(props, "rpm", 0.0),
         }),

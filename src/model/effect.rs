@@ -602,6 +602,8 @@ pub struct SwirlParams {
     pub strength: f32,
     /// Radius of the swirl warp.
     pub radius: f32,
+    /// Exponent of the falloff curve.
+    pub exponent: i32,
 }
 
 impl Default for SwirlParams {
@@ -609,6 +611,7 @@ impl Default for SwirlParams {
         Self {
             strength: 0.0,
             radius: 0.0,
+            exponent: 4,
         }
     }
 }
