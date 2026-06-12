@@ -150,7 +150,7 @@ pub fn render_scene(
 
     // Composite layers bottom to top onto the composition canvas
     for layer in &scene.layers {
-        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, debug_layout, disabled_effects) {
+        if let Err(e) = render_layer(&mut comp_canvas, layer, image_cache, assets_dir, scene.width, scene.height, debug_layout, disabled_effects) {
             warn!("Failed to render layer '{}' (id={}): {}",
                   layer.label.as_deref().unwrap_or("unnamed"), layer.id, e);
         }
@@ -190,6 +190,8 @@ fn render_layer(
     layer: &ResolvedLayer,
     image_cache: &mut ImageCache,
     assets_dir: &Path,
+    scene_w: u32,
+    scene_h: u32,
     debug_layout: bool,
     disabled_effects: &[String],
 ) -> Result<()> {
@@ -221,8 +223,9 @@ fn render_layer(
     );
 
     if debug_layout {
-        location[0] = (location[0] - canvas_center[0]) * 0.5 + canvas_center[0];
-        location[1] = (location[1] - canvas_center[1]) * 0.5 + canvas_center[1];
+        let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
+        location[0] = (location[0] - proj_center[0]) * 0.5 + canvas_center[0];
+        location[1] = (location[1] - proj_center[1]) * 0.5 + canvas_center[1];
         scale[0] *= 0.5;
         scale[1] *= 0.5;
     }
@@ -725,6 +728,21 @@ fn get_char_pixels(c: char) -> u16 {
     }
 }
 
+pub(crate) fn draw_text_with_bg(img: &mut RgbaImage, x: i32, y: i32, text: &str, fg: Rgba<u8>, bg: Rgba<u8>, scale: i32) {
+    let w = text.len() as i32 * 4 * scale;
+    let h = 5 * scale;
+    for dy in 0..h {
+        for dx in 0..w {
+            let px = x + dx;
+            let py = y + dy;
+            if px >= 0 && px < img.width() as i32 && py >= 0 && py < img.height() as i32 {
+                img.put_pixel(px as u32, py as u32, bg);
+            }
+        }
+    }
+    draw_text(img, x, y, text, fg, scale);
+}
+
 pub(crate) fn draw_char(img: &mut RgbaImage, x: i32, y: i32, c: char, color: Rgba<u8>, scale: i32) {
     let bits = get_char_pixels(c);
     for row in 0..5 {
@@ -755,7 +773,7 @@ pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: 
 }
 
 /// Draw outline bounding box and label for a layer (used in debug_layout mode)
-fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, _scene_w: u32, _scene_h: u32, disabled_effects: &[String]) {
+fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32, disabled_effects: &[String]) {
     let canvas_w = canvas.width() as f32;
     let canvas_h = canvas.height() as f32;
     let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
@@ -781,12 +799,13 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, _scen
     // Capture real values before halving for the label
     let rendered_w = layer_w * scale[0].abs();
     let rendered_h = layer_h * scale[1].abs();
-    let cx_offset = location[0] - (canvas_w / 2.0);
-    let cy_offset = location[1] - (canvas_h / 2.0);
+    let cx_offset = location[0] - (scene_w as f32 / 2.0);
+    let cy_offset = location[1] - (scene_h as f32 / 2.0);
 
     // Scale locations and sizes by 0.5 and center them within expanded canvas
-    location[0] = (location[0] - canvas_center[0]) * 0.5 + canvas_center[0];
-    location[1] = (location[1] - canvas_center[1]) * 0.5 + canvas_center[1];
+    let proj_center = [scene_w as f32 / 2.0, scene_h as f32 / 2.0];
+    location[0] = (location[0] - proj_center[0]) * 0.5 + canvas_center[0];
+    location[1] = (location[1] - proj_center[1]) * 0.5 + canvas_center[1];
     scale[0] *= 0.5;
     scale[1] *= 0.5;
 
@@ -830,16 +849,17 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, _scen
 
     let label_x = tl[0] as i32 + 5;
     let label_y = tl[1] as i32 + 5;
+    let bg = Rgba([26, 26, 26, 230]);
 
     let line1 = format!("{} {}x{} @ {}%  {}x{}",
         clean_label,
         layer_w as u32, layer_h as u32,
         (rendered_w / layer_w * 100.0) as u32,
         rendered_w as u32, rendered_h as u32);
-    draw_text(canvas, label_x, label_y, &line1, color, 2);
+    draw_text_with_bg(canvas, label_x, label_y, &line1, color, bg, 2);
 
     let line2 = format!("POS {}:{}  ROT {}d",
         cx_offset as i32, cy_offset as i32,
         rotation as i32);
-    draw_text(canvas, label_x + 2, label_y + 12, &line2, color, 2);
+    draw_text_with_bg(canvas, label_x + 2, label_y + 5 * 2 + 2, &line2, color, bg, 2);
 }
