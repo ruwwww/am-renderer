@@ -44,11 +44,15 @@ During evaluation, all animated properties are resolved to concrete values at th
 
 Effects are classified into categories based on where they apply in the rendering pipeline:
 
-1. **Transform Modifiers** (eval layer) - Modify the layer's transform matrix before rendering: Oscillate, Swing, RandomDisplace
-2. **Temporal Effects** (render layer) - Affect visibility/opacity over time: MotionBlur, Blink, Fade
-3. **UV Effects** (render layer) - Modify sampling coordinates: Tile, Offset, StretchSegment
-4. **Color Effects** (render layer) - Modify pixel colors post-sampling: Exposure, BrightnessContrast, HSL, ColorTint, Vignette, Sharpen, FindEdges, GaussianBlur, LensBlur, GradientOverlay, ColorFill, Lift (Copy Background)
-5. **Keying** (render layer) - Alpha manipulation: LumaKey
+1. **Transform Modifiers** (`render/effects/transform.rs`) - Modify the layer's transform matrix before rendering: Oscillate, Swing, RandomDisplace
+2. **Temporal Effects** (`render/effects/{fade,blink,motion_blur}.rs`) - Affect visibility/opacity over time: MotionBlur, Blink, Fade
+3. **UV Effects** (`render/effects/{tile,offset,stretch_segment}.rs`) - Modify sampling coordinates: Tile, Offset, StretchSegment
+4. **Color Effects** (`render/effects/{exposure,brightness_contrast,hsl,color_tint,vignette,sharpen,find_edges,highlight_shadow,gradient_overlay}.rs`) - Modify pixel colors post-sampling: Exposure, BrightnessContrast, HSL, ColorTint, Vignette, Sharpen, FindEdges, HighlightShadow, GradientOverlay
+5. **Blur Effects** (`render/effects/{gaussian_blur,lens_blur}.rs`) - Full-image convolution: GaussianBlur, LensBlur
+6. **Keying** (`render/effects/luma_key.rs`) - Alpha manipulation: LumaKey
+7. **Lift (Copy Background)** (`render/effects/lift.rs`) - Background sampling with shape blend: Lift
+
+All pixel effects are dispatched through a single centralized function `render/effects/mod.rs::apply_pixel_effects()`.
 
 ## Key Design Decisions
 

@@ -9,7 +9,7 @@ This document provides structured context for AI agents working with the `am-ren
 - **Key crates**: `quick-xml` (parsing), `image` (rendering), `glam` (math), `clap` (CLI), `rayon` (parallelism)
 - **Entry point**: `src/main.rs` (909 lines)
 - **Library root**: `src/lib.rs` (re-exports 5 modules)
-- **Tests**: Inline `#[cfg(test)] mod tests` in `src/parser/xml.rs` and `src/eval/effects.rs`
+- **Tests**: Inline `#[cfg(test)] mod tests` in `src/parser/xml.rs` and `src/render/effects/transform.rs`
 - **External dep**: `ffmpeg` (required for MP4 export only)
 
 ## Pipeline (data flow)
@@ -26,8 +26,8 @@ XML → parser → XmlScene → main::convert_project → Project
 1. **Define XML type** → `src/parser/types.rs` if new XML elements are needed
 2. **Define parameter struct** → `src/model/effect.rs` — add variant to `EffectType` enum and create params struct
 3. **Add XML-to-model conversion** → `src/main.rs` in `convert_effect()`
-4. **If transform modifier**: implement in `src/eval/effects.rs`
-5. **If pixel/image effect**: implement in `src/render/effects/` (color.rs, blur.rs, or uv.rs) and register in `src/render/effects/mod.rs`
+4. **If transform modifier**: implement in `src/render/effects/transform.rs`
+5. **If pixel/image effect**: create a new file in `src/render/effects/` (e.g., `my_effect.rs`) and add a match arm to `apply_pixel_effects()` in `src/render/effects/mod.rs`
 6. **Test**: add unit tests alongside the implementation
 
 ## Animation System

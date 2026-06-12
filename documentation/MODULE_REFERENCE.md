@@ -79,19 +79,14 @@ Module declarations.
   - Filters visible layers within time range
   - Computes normalized time per layer
   - Evaluates all animated properties
-  - Applies fade effects to opacity
+  - Applies fade effects to opacity (delegates to `render/effects/fade.rs`)
 
 ### `transform.rs` (102 lines)
 - `build_transform_matrix(transform) -> Mat3` — Builds 3x3 affine matrix (translate * rotate * scale) with anchor-point correction
 - `invert_transform(transform) -> Mat3` — Inverts the affine matrix
 - `transform_point(mat, point) -> Vec2` — Matrix * vector multiplication
 
-### `effects.rs` (128 lines)
-- `apply_transform_effects(resolved_layer, effects, normalized_time) -> ResolvedLayer` — Applies:
-  - **Oscillate**: Sinusoidal displacement along X/Y axes with configurable frequency, amplitude, phase
-  - **Swing**: Pendulum rotation oscillation with configurable frequency, amplitude, decay
-  - **RandomDisplace**: Deterministic hash-based noise displacement with configurable speed and magnitude
-- 1 unit test for oscillate at t=0, 0.25, 0.5
+Transform-modifying effects (Oscillate, Swing, RandomDisplace) were moved to `render/effects/transform.rs`.
 
 ## `src/render/` — Software Rendering Pipeline
 
@@ -115,28 +110,35 @@ Core rendering engine:
 - `blend_pixel(base, overlay, mode) -> Rgba` — Implements 8 blend modes using Porter-Duff "over" compositing
 
 ### `effects/`
-#### `mod.rs` — Effect dispatcher
-- `apply_color_effects(pixel, effects, cache, bg_img, u, v, layer_opacity) -> Rgba` — Chains effects in order on a single pixel
+#### `mod.rs` — Centralized pixel effect dispatcher
+- `apply_pixel_effects(effects, img, layer) -> RgbaImage` — Dispatches all pixel-processing effects in order via a single match, evaluating animated parameters using the layer's normalized time
+- Also re-exports `apply_transform_effects` from `transform.rs`
 
-#### `color.rs` (328 lines)
-- `apply_exposure(pixel, ev)` — Exposure adjustment in EV stops
-- `apply_brightness_contrast(pixel, brightness, contrast)` — Brightness/contrast with contrast pivot
-- `apply_hsl(pixel, hue, saturation, lightness)` — Full HSL adjustment
-- `apply_vignette(pixel, center, radius, feather, color, opacity)` — Vignette overlay
-- `apply_color_fill(pixel, color, blend_mode, opacity)` — Color fill with blend mode
-- `apply_find_edges(pixel, neighbors, threshold, color)` — Sobel edge detection
-
-#### `blur.rs` (125 lines)
-- `apply_gaussian_blur(img, radius, sigma)` — Separable 2-pass Gaussian blur
-- `apply_box_blur(img, radius)` — Separable 2-pass box blur
-- Blurs operate on the whole image, applied as post-processing steps
-
-#### `uv.rs` (238 lines)
-- `apply_tile(img, scale, phase, vert_offset, mirror, angle)` — Full Alight Motion Tiles effect with brick stagger and per-tile rotation
-- `sample_wrapped(img, u, v)` — Wrapped (repeating) texture sampling
-- `sample_clamped(img, u, v)` — Clamped (edge clamp) texture sampling
-- `apply_offset(...)` — Scroll/shift UV with wrapping
-- `apply_stretch_segment(...)` — Split frame and stretch a segment
+#### Per-effect modules (one file each):
+- `exposure.rs` — Exposure adjustment in EV stops
+- `brightness_contrast.rs` — Brightness/contrast with contrast pivot
+- `hsl.rs` — Full HSL adjustment (hue shift, saturation, lightness) with `rgb_to_hsl`/`hsl_to_rgb` helpers
+- `color_tint.rs` — Color fill with alpha blending
+- `vignette.rs` — Radial darkening at frame edges with punchout mode
+- `find_edges.rs` — Sobel edge detection via parallel channel decomposition
+- `highlight_shadow.rs` — Stub (not yet implemented)
+- `gradient_overlay.rs` — Stub (not yet implemented)
+- `luma_key.rs` — Stub (not yet implemented)
+- `tile.rs` — Repeating/mirror tiling with brick stagger and per-tile rotation
+- `offset.rs` — Scroll/shift UV with wrapping, plus `sample_wrapped`/`sample_clamped` helpers
+- `stretch_segment.rs` — Split frame and stretch a contiguous segment
+- `gaussian_blur.rs` — Separable 2-pass Gaussian blur with kernel builder; also exports `box_blur`
+- `lens_blur.rs` — Stub (not yet implemented)
+- `sharpen.rs` — Stub (not yet implemented)
+- `lift.rs` — Copy Background: samples the composition canvas via forward transform with affine stepping, blends with optional shape fill
+- `transform.rs` — Transform-modifying effects: Oscillate (sinusoidal displacement), Swing (pendulum rotation), RandomDisplace (deterministic noise displacement); moved from `eval/effects.rs`
+- `fade.rs` — Linear opacity fade at layer boundaries; called from `eval/timeline.rs`
+- `blink.rs` — Stub (periodic visibility)
+- `motion_blur.rs` — Stub (temporal supersampling)
+- `gaussian_blur.rs` — Separable 2-pass Gaussian and box blur (originally `blur.rs`)
+- `color.rs` — **Deleted**: split into individual modules above
+- `blur.rs` — **Renamed**: to `gaussian_blur.rs`
+- `uv.rs` — **Deleted**: split into individual modules above
 
 ## `src/export/` — Output Formats
 

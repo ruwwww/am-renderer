@@ -1,6 +1,6 @@
 # Effects Catalog
 
-## Transform Modifiers (evaluated in `eval::effects`)
+## Transform Modifiers (evaluated in `render/effects/transform`)
 
 | Effect | XML Name | Params | Behavior |
 |--------|----------|--------|----------|
@@ -51,8 +51,8 @@
 ## Notes
 
 - Effects are applied in the order they appear in the layer's effect stack
-- Transform modifiers (oscillate, swing, randomDisplace) are applied during the `eval` phase and modify the layer's transform before rendering
-- All other effects are applied during the `render` phase as per-pixel or per-image post-processing
+- Transform modifiers (oscillate, swing, randomDisplace) are applied via `render/effects/transform.rs` and modify the layer's transform before compositing
+- All other effects are applied during the `render` phase via the centralized `render/effects/mod.rs::apply_pixel_effects()` dispatcher
 - Blur effects (GaussianBlur, LensBlur) operate on the entire rendered layer image, not per-pixel
 - MotionBlur is listed as temporal but is currently a stub — it requires multi-sample evaluation
 - The `Unknown` variant exists for unrecognized XML effect IDs, ensuring forward compatibility
