@@ -16,6 +16,7 @@ pub mod luma_key;
 pub mod tile;
 pub mod offset;
 pub mod stretch_segment;
+pub mod swirl;
 pub mod gaussian_blur;
 pub mod lens_blur;
 pub mod sharpen;
@@ -101,6 +102,13 @@ pub fn apply_pixel_effects(
                     img
                 }
             }
+            EffectType::Swirl(params) => {
+                if params.strength.abs() > 0.001 {
+                    swirl::apply_swirl(img, params.strength, params.radius)
+                } else {
+                    img
+                }
+            }
             EffectType::Offset(params) => {
                 if params.offset[0].abs() > 0.5 || params.offset[1].abs() > 0.5 {
                     offset::apply_offset(img, params.offset[0], params.offset[1])
@@ -145,8 +153,8 @@ pub fn apply_pixel_effects(
                 let tune = params.tune.evaluate(layer.normalized_t);
                 motion_blur::apply_motion_blur(img, tune, layer.time_secs, layer.location)
             }
-            // Transform effects handled separately via apply_transform_effects
-            EffectType::Oscillate(_) | EffectType::Swing(_) | EffectType::RandomDisplace(_) => img,
+            // Transform effects handled separately via apply_transform_effects / timeline
+            EffectType::Oscillate(_) | EffectType::Swing(_) | EffectType::RandomDisplace(_) | EffectType::Spin(_) => img,
             // Lift handled separately in create_layer_source
             EffectType::Lift(_) => img,
             // Fade handled separately in resolve_layer

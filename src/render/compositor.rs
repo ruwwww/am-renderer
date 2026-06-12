@@ -450,7 +450,7 @@ fn create_base_shape_source(
     image_cache: &mut ImageCache,
     assets_dir: &Path,
 ) -> Result<RgbaImage> {
-    let img = match layer.fill_type {
+    let mut img = match layer.fill_type {
         FillType::Media => {
             if let Some(ref uri) = layer.fill_image {
                 let source = image_cache.load(uri, assets_dir)?;
@@ -484,6 +484,26 @@ fn create_base_shape_source(
             RgbaImage::new(w, h)
         }
     };
+
+    if layer.s.as_deref() == Some(".circle") {
+        let cx = w as f32 / 2.0;
+        let cy = h as f32 / 2.0;
+        let rx = cx.max(1.0);
+        let ry = cy.max(1.0);
+
+        for y in 0..h {
+            let dy = y as f32 - cy;
+            let ny = dy / ry;
+            for x in 0..w {
+                let dx = x as f32 - cx;
+                let nx = dx / rx;
+                if nx * nx + ny * ny > 1.0 {
+                    img.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+                }
+            }
+        }
+    }
+
     Ok(img)
 }
 

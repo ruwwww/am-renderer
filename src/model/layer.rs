@@ -113,6 +113,8 @@ pub struct Layer {
     pub effects: Vec<Effect>,
     /// Layer size [w, h] in pixels.
     pub size: [f32; 2],
+    /// Shape primitive name (e.g. ".rect", ".circle", ".roundrect").
+    pub s: Option<String>,
 }
 
 /// A resolved (evaluated at a specific time) layer with concrete values.
@@ -146,6 +148,8 @@ pub struct ResolvedLayer {
     pub effects: Vec<Effect>,
     /// Layer size [w, h] in pixels.
     pub size: [f32; 2],
+    /// Shape primitive name (e.g. ".rect", ".circle", ".roundrect").
+    pub s: Option<String>,
     /// Evaluation time in seconds.
     pub time_secs: f32,
     /// Normalized time [0, 1] relative to the layer duration.

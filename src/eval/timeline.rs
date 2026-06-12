@@ -68,6 +68,27 @@ pub fn evaluate(project: &Project, time_secs: f32) -> ResolvedScene {
     }
 }
 
+fn integrate_spin_numeric(rpm_animated: &crate::model::Animated<f32>, t: f32, duration_secs: f32) -> f32 {
+    match rpm_animated {
+        crate::model::Animated::Static(rpm) => {
+            rpm * t * duration_secs * 6.0
+        }
+        crate::model::Animated::Keyframed(_) => {
+            let n = 100;
+            let step = t / n as f32;
+            let mut sum = 0.0;
+            let mut prev_val = rpm_animated.evaluate(0.0);
+            for i in 1..=n {
+                let u = i as f32 * step;
+                let val = rpm_animated.evaluate(u);
+                sum += (prev_val + val) * 0.5 * step;
+                prev_val = val;
+            }
+            sum * duration_secs * 6.0
+        }
+    }
+}
+
 /// Resolve a single layer at a given normalized time.
 ///
 /// Evaluates all animated transform properties (location, scale, rotation,
@@ -85,12 +106,23 @@ fn resolve_layer(layer: &Layer, t: f32, time_secs: f32) -> ResolvedLayer {
         }
     }
 
+    let mut rotation = layer.transform.rotation.evaluate(t);
+
+    // Apply spin effect if present
+    for effect in &layer.effects {
+        if let crate::model::EffectType::Spin(ref params) = effect.effect_type {
+            let duration_ms = layer.end_time - layer.start_time;
+            let duration_secs = duration_ms / 1000.0;
+            rotation += integrate_spin_numeric(&params.rpm, t, duration_secs);
+        }
+    }
+
     ResolvedLayer {
         id: layer.id,
         label: layer.label.clone(),
         location: layer.transform.location.evaluate(t),
         scale: layer.transform.scale.evaluate(t),
-        rotation: layer.transform.rotation.evaluate(t),
+        rotation,
         opacity,
         fill_type: layer.fill_type,
         fill_image: layer.fill_image.clone(),
@@ -100,6 +132,7 @@ fn resolve_layer(layer: &Layer, t: f32, time_secs: f32) -> ResolvedLayer {
         media_fill_mode: layer.media_fill_mode.clone(),
         effects: layer.effects.clone(),
         size: layer.size,
+        s: layer.s.clone(),
         time_secs,
         normalized_t: t,
     }

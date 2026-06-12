@@ -68,6 +68,10 @@ pub enum EffectType {
     FindEdges(FindEdgesParams),
     /// Segment stretching distortion.
     StretchSegment(StretchSegmentParams),
+    /// Spin auto-rotation effect.
+    Spin(SpinParams),
+    /// Swirl warp effect.
+    Swirl(SwirlParams),
 
     /// Unknown or unsupported effect — stores the raw effect ID from XML.
     Unknown(String),
@@ -100,6 +104,8 @@ impl EffectType {
             EffectType::Offset(_) => "Offset",
             EffectType::FindEdges(_) => "FindEdges",
             EffectType::StretchSegment(_) => "StretchSegment",
+            EffectType::Spin(_) => "Spin",
+            EffectType::Swirl(_) => "Swirl",
             EffectType::Unknown(_) => "Unknown",
         }
     }
@@ -570,6 +576,39 @@ impl Default for StretchSegmentParams {
             stretch: 0.0,
             offset: 0.0,
             smooth: 0.0,
+        }
+    }
+}
+
+/// Parameters for spin effect.
+#[derive(Debug, Clone)]
+pub struct SpinParams {
+    /// Revolutions per minute (animated).
+    pub rpm: Animated<f32>,
+}
+
+impl Default for SpinParams {
+    fn default() -> Self {
+        Self {
+            rpm: Animated::Static(0.0),
+        }
+    }
+}
+
+/// Parameters for swirl effect.
+#[derive(Debug, Clone)]
+pub struct SwirlParams {
+    /// Strength of the swirl warp.
+    pub strength: f32,
+    /// Radius of the swirl warp.
+    pub radius: f32,
+}
+
+impl Default for SwirlParams {
+    fn default() -> Self {
+        Self {
+            strength: 0.0,
+            radius: 0.0,
         }
     }
 }

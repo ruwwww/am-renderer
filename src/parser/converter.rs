@@ -174,6 +174,7 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
             media_fill_mode: shape.media_fill_mode.clone(),
             effects,
             size,
+            s: shape.s.clone(),
         });
     }
 
@@ -547,6 +548,13 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
             stretch: get_prop_float(props, "stretch", 0.0),
             offset: get_prop_float(props, "offset", 0.0),
             smooth: get_prop_float(props, "smooth", 0.0),
+        }),
+        "com.alightcreative.effects.swirl4" | "com.alightcreative.effects.swirl" => EffectType::Swirl(SwirlParams {
+            strength: get_prop_float(props, "strength", 0.0),
+            radius: get_prop_float(props, "radius", 0.5),
+        }),
+        "com.alightcreative.effects.spin" => EffectType::Spin(SpinParams {
+            rpm: get_prop_animated_float(props, "rpm", 0.0),
         }),
         other => EffectType::Unknown(other.to_string()),
     };
