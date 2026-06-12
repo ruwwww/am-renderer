@@ -79,18 +79,9 @@ fn resolve_layer(layer: &Layer, t: f32, time_secs: f32) -> ResolvedLayer {
     for effect in &layer.effects {
         if let crate::model::EffectType::Fade(ref params) = effect.effect_type {
             let duration_ms = layer.end_time - layer.start_time;
-            let elapsed_ms = t * duration_ms;
-
-            if params.in_time > 0.0 && elapsed_ms < params.in_time {
-                let factor = (elapsed_ms / params.in_time).clamp(0.0, 1.0);
-                opacity *= factor;
-            }
-
-            let remaining_ms = duration_ms - elapsed_ms;
-            if params.out_time > 0.0 && remaining_ms < params.out_time {
-                let factor = (remaining_ms / params.out_time).clamp(0.0, 1.0);
-                opacity *= factor;
-            }
+            opacity = crate::render::effects::fade::apply_fade(
+                opacity, t, duration_ms, params.in_time, params.out_time,
+            );
         }
     }
 

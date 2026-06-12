@@ -11,9 +11,10 @@
 
 use crate::eval::timeline::ResolvedScene;
 use crate::eval::transform::{build_transform_matrix, invert_transform, transform_point};
-use crate::eval::effects::apply_transform_effects;
-use crate::model::{ResolvedLayer, FillType, Gradient, EffectType};
+use crate::model::{ResolvedLayer, FillType, Gradient};
 use crate::render::blending::blend_pixel;
+use crate::render::effects::transform::apply_transform_effects;
+use crate::render::effects::lift::apply_lift;
 use image::{RgbaImage, Rgba};
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -171,7 +172,7 @@ pub fn render_scene(
     // Second pass: Draw bounding box outlines & labels on top of everything
     if debug_layout {
         for layer in &scene.layers {
-            draw_layer_debug_outline(&mut canvas, layer);
+            draw_layer_debug_outline(&mut canvas, layer, scene.width, scene.height);
         }
     }
 
@@ -394,7 +395,7 @@ fn create_layer_source(
     let scale_x = layer.scale[0].abs();
     let scale_y = layer.scale[1].abs();
 
-    let has_lift = layer.effects.iter().any(|e| matches!(e.effect_type, EffectType::Lift(_)));
+    let has_lift = layer.effects.iter().any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
     let has_effects = !layer.effects.is_empty();
 
     let (w, h) = if (has_lift || has_effects) && layer.fill_type != FillType::Media {
@@ -405,21 +406,16 @@ fn create_layer_source(
         (layer.size[0].max(1.0) as u32, layer.size[1].max(1.0) as u32)
     };
 
-    // Check if the layer has a Lift (Copy Background) effect
-    let mut lift_effect = None;
-    for effect in &layer.effects {
-        if let EffectType::Lift(ref params) = effect.effect_type {
-            lift_effect = Some(params);
-            break;
-        }
-    }
-
-    let mut img = if let Some(lift_params) = lift_effect {
-        let mut bg_img = RgbaImage::new(w, h);
-        let half_w = layer.size[0] / 2.0;
-        let half_h = layer.size[1] / 2.0;
-        let cw = canvas.width() as i32;
-        let ch = canvas.height() as i32;
+    let mut img = if has_lift {
+        let lift_params = layer.effects.iter()
+            .find_map(|e| {
+                if let crate::model::EffectType::Lift(ref params) = e.effect_type {
+                    Some(params)
+                } else {
+                    None
+                }
+            })
+            .expect("Lift effect already confirmed");
 
         let shape_img = if lift_params.fill > 0.0 {
             Some(create_base_shape_source(layer, w, h, image_cache, assets_dir)?)
@@ -427,145 +423,12 @@ fn create_layer_source(
             None
         };
 
-        // Precompute affine stepping vectors for fwd transform.
-        // For a pixel (lx, ly) in layer-local space:
-        //   local_x = (lx + 0.5) / w * size_w - half_w
-        //   local_y = (ly + 0.5) / h * size_h - half_h
-        // canvas_pt = fwd * [local_x, local_y]
-        // Expanding: as lx increases by 1, local_x increases by size_w/w.
-        // So canvas_pt advances by fwd * [size_w/w, 0] — constant per row.
-        let dx_per_px = layer.size[0] / w as f32; // how much local_x changes per lx+1
-        let dy_per_py = layer.size[1] / h as f32; // how much local_y changes per ly+1
-
-        // fwd row stepping vector (advancing lx by 1)
-        let fwd_step_x = [fwd[0][0] * dx_per_px, fwd[0][1] * dx_per_px];
-        // fwd column stepping vector (advancing ly by 1)
-        let fwd_step_y = [fwd[1][0] * dy_per_py, fwd[1][1] * dy_per_py];
-
-        // Compute canvas origin for ly=0, lx=0
-        let local_x0 = 0.5 / w as f32 * layer.size[0] - half_w;
-        let local_y0 = 0.5 / h as f32 * layer.size[1] - half_h;
-        let canvas_origin = transform_point(fwd, [local_x0, local_y0]);
-
-        let fill_f = lift_params.fill.clamp(0.0, 1.0);
-        let fill_f_u = (fill_f * 256.0) as u32;
-        let inv_f_u = 256 - fill_f_u;
-
-        let canvas_raw = canvas.as_raw();
-        let canvas_stride = cw as usize * 4;
-
-        let bg_raw = bg_img.as_mut();
-
-        for ly in 0..h {
-            let row_cx0 = canvas_origin[0] + fwd_step_y[0] * ly as f32;
-            let row_cy0 = canvas_origin[1] + fwd_step_y[1] * ly as f32;
-
-            for lx in 0..w {
-                let cx = (row_cx0 + fwd_step_x[0] * lx as f32) as i32;
-                let cy = (row_cy0 + fwd_step_x[1] * lx as f32) as i32;
-
-                let bg_pixel = if cx >= 0 && cx < cw && cy >= 0 && cy < ch {
-                    let off = cy as usize * canvas_stride + cx as usize * 4;
-                    [canvas_raw[off], canvas_raw[off+1], canvas_raw[off+2], canvas_raw[off+3]]
-                } else {
-                    [0u8; 4]
-                };
-
-                let dst_off = (ly * w + lx) as usize * 4;
-                let final_px = if let Some(ref s_img) = shape_img {
-                    let sp = s_img.get_pixel(lx, ly).0;
-                    [
-                        ((bg_pixel[0] as u32 * inv_f_u + sp[0] as u32 * fill_f_u) >> 8) as u8,
-                        ((bg_pixel[1] as u32 * inv_f_u + sp[1] as u32 * fill_f_u) >> 8) as u8,
-                        ((bg_pixel[2] as u32 * inv_f_u + sp[2] as u32 * fill_f_u) >> 8) as u8,
-                        ((bg_pixel[3] as u32 * inv_f_u + sp[3] as u32 * fill_f_u) >> 8) as u8,
-                    ]
-                } else {
-                    bg_pixel
-                };
-
-                bg_raw[dst_off]     = final_px[0];
-                bg_raw[dst_off + 1] = final_px[1];
-                bg_raw[dst_off + 2] = final_px[2];
-                bg_raw[dst_off + 3] = final_px[3];
-            }
-        }
-        bg_img
+        apply_lift(w, h, layer.size[0], layer.size[1], lift_params.fill, shape_img, canvas, fwd)?
     } else {
         create_base_shape_source(layer, w, h, image_cache, assets_dir)?
     };
 
-    for effect in &layer.effects {
-        match &effect.effect_type {
-            EffectType::Exposure(params) => {
-                let exp = params.exposure.evaluate(layer.normalized_t);
-                if exp.abs() > 0.01 {
-                    crate::render::effects::color::apply_exposure(&mut img, exp);
-                }
-            }
-            EffectType::GaussianBlur(params) => {
-                if params.radius > 0.5 {
-                    img = crate::render::effects::blur::gaussian_blur(&img, params.radius);
-                }
-            }
-            EffectType::Vignette(params) => {
-                if params.strength.abs() > 0.001 {
-                    crate::render::effects::color::apply_vignette(
-                        &mut img,
-                        params.feather,
-                        params.roundness,
-                        params.scale,
-                        params.strength,
-                        params.tint,
-                        params.overlaycolor,
-                        params.punchout,
-                    );
-                }
-            }
-            EffectType::BrightnessContrast(params) => {
-                if params.brightness.abs() > 0.001 || params.contrast.abs() > 0.001 {
-                    crate::render::effects::color::apply_brightness_contrast(&mut img, params.brightness, params.contrast);
-                }
-            }
-            EffectType::SaturationVibrance(params) => {
-                if params.saturation.abs() > 0.001 {
-                    crate::render::effects::color::apply_hsl(&mut img, 0.0, params.saturation, 0.0);
-                }
-            }
-            EffectType::ColorTint(params) => {
-                let color = [params.tint[0], params.tint[1], params.tint[2], 1.0];
-                crate::render::effects::color::apply_color_fill(&mut img, color, 1.0);
-            }
-            EffectType::FindEdges(params) => {
-                crate::render::effects::color::find_edges(
-                    &mut img, params.smoothing, params.threshold, params.invert,
-                );
-            }
-            EffectType::StretchSegment(params) => {
-                if params.stretch.abs() > 0.5 {
-                    img = crate::render::effects::uv::apply_stretch_segment(
-                        &img, params.angle, params.stretch, params.offset, params.smooth,
-                    );
-                }
-            }
-            EffectType::Offset(params) => {
-                if params.offset[0].abs() > 0.5 || params.offset[1].abs() > 0.5 {
-                    img = crate::render::effects::uv::apply_offset(
-                        &img, params.offset[0], params.offset[1],
-                    );
-                }
-            }
-            EffectType::Tile(params) => {
-                if params.scale > 1.01 || params.angle.abs() > 0.001 {
-                    img = crate::render::effects::uv::apply_tile(
-                        &img, params.scale, params.phase, params.vert_offset,
-                        params.mirror, params.angle,
-                    );
-                }
-            }
-            _ => {}
-        }
-    }
+    img = crate::render::effects::apply_pixel_effects(&layer.effects, img, layer)?;
 
     Ok(img)
 }
@@ -887,7 +750,7 @@ pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: 
 }
 
 /// Draw outline bounding box and label for a layer (used in debug_layout mode)
-fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer) {
+fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32) {
     let canvas_w = canvas.width() as f32;
     let canvas_h = canvas.height() as f32;
     let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
@@ -947,6 +810,6 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer) {
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
         .collect();
-    let label_text = format!("{}:{}", clean_label, layer.id);
+    let label_text = format!("{}:{} {}x{}", clean_label, layer.id, scene_w, scene_h);
     draw_text(canvas, tl[0] as i32 + 5, tl[1] as i32 + 5, &label_text, color, 2);
 }
