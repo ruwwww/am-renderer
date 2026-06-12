@@ -755,7 +755,7 @@ pub(crate) fn draw_text(img: &mut RgbaImage, x: i32, y: i32, text: &str, color: 
 }
 
 /// Draw outline bounding box and label for a layer (used in debug_layout mode)
-fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene_w: u32, scene_h: u32, disabled_effects: &[String]) {
+fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, _scene_w: u32, _scene_h: u32, disabled_effects: &[String]) {
     let canvas_w = canvas.width() as f32;
     let canvas_h = canvas.height() as f32;
     let canvas_center = [canvas_w / 2.0, canvas_h / 2.0];
@@ -777,6 +777,12 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
         layer.normalized_t,
         disabled_effects,
     );
+
+    // Capture real values before halving for the label
+    let rendered_w = layer_w * scale[0].abs();
+    let rendered_h = layer_h * scale[1].abs();
+    let cx_offset = location[0] - (canvas_w / 2.0);
+    let cy_offset = location[1] - (canvas_h / 2.0);
 
     // Scale locations and sizes by 0.5 and center them within expanded canvas
     location[0] = (location[0] - canvas_center[0]) * 0.5 + canvas_center[0];
@@ -811,11 +817,29 @@ fn draw_layer_debug_outline(canvas: &mut RgbaImage, layer: &ResolvedLayer, scene
     draw_line(canvas, br[0] as i32, br[1] as i32, bl[0] as i32, bl[1] as i32, color);
     draw_line(canvas, bl[0] as i32, bl[1] as i32, tl[0] as i32, tl[1] as i32, color);
 
-    // Draw clean text label
+    // Draw pivot crosshair at the layer's transform origin
+    let pivot = transform_point(&fwd, [0.0, 0.0]);
+    draw_line(canvas, pivot[0] as i32 - 6, pivot[1] as i32, pivot[0] as i32 + 6, pivot[1] as i32, Rgba([255, 255, 255, 180]));
+    draw_line(canvas, pivot[0] as i32, pivot[1] as i32 - 6, pivot[0] as i32, pivot[1] as i32 + 6, Rgba([255, 255, 255, 180]));
+
+    // Draw clean text label (two lines)
     let clean_label: String = layer.label.as_deref().unwrap_or("Layer")
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
         .collect();
-    let label_text = format!("{}:{} {}x{}", clean_label, layer.id, scene_w, scene_h);
-    draw_text(canvas, tl[0] as i32 + 5, tl[1] as i32 + 5, &label_text, color, 2);
+
+    let label_x = tl[0] as i32 + 5;
+    let label_y = tl[1] as i32 + 5;
+
+    let line1 = format!("{} {}x{} @ {}%  {}x{}",
+        clean_label,
+        layer_w as u32, layer_h as u32,
+        (rendered_w / layer_w * 100.0) as u32,
+        rendered_w as u32, rendered_h as u32);
+    draw_text(canvas, label_x, label_y, &line1, color, 2);
+
+    let line2 = format!("POS {}:{}  ROT {}d",
+        cx_offset as i32, cy_offset as i32,
+        rotation as i32);
+    draw_text(canvas, label_x + 2, label_y + 12, &line2, color, 2);
 }
