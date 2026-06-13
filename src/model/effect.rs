@@ -56,6 +56,8 @@ pub enum EffectType {
     GradientOverlay(GradientOverlayParams),
     /// Lift adjustment (shadows color shift / copy background).
     Lift(LiftParams),
+    /// Colorize effect (shift hue preserving luminance).
+    Colorize(ColorizeParams),
 
     // -- Keying --
     /// Luminance-based alpha keying.
@@ -100,6 +102,7 @@ impl EffectType {
             EffectType::LensBlur(_) => "LensBlur",
             EffectType::GradientOverlay(_) => "GradientOverlay",
             EffectType::Lift(_) => "Lift",
+            EffectType::Colorize(_) => "Colorize",
             EffectType::LumaKey(_) => "LumaKey",
             EffectType::Offset(_) => "Offset",
             EffectType::FindEdges(_) => "FindEdges",
@@ -612,6 +615,21 @@ impl Default for SwirlParams {
             strength: 0.0,
             radius: 0.0,
             exponent: 4,
+        }
+    }
+}
+
+/// Parameters for Colorize effect.
+#[derive(Debug, Clone)]
+pub struct ColorizeParams {
+    /// Tint vector: [hue_degrees, strength, 0.0]
+    pub tint: [f32; 3],
+}
+
+impl Default for ColorizeParams {
+    fn default() -> Self {
+        Self {
+            tint: [0.0, 0.0, 0.0],
         }
     }
 }

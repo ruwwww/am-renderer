@@ -7,6 +7,7 @@ use crate::model::{Effect, EffectType, ResolvedLayer};
 pub mod blink;
 pub mod brightness_contrast;
 pub mod color_tint;
+pub mod colorize;
 pub mod exposure;
 pub mod fade;
 pub mod find_edges;
@@ -46,8 +47,10 @@ pub fn apply_pixel_effects(
         img = match &effect.effect_type {
             EffectType::Exposure(params) => {
                 let exp = params.exposure.evaluate(layer.normalized_t);
-                if exp.abs() > 0.01 {
-                    exposure::apply_exposure(img, exp)
+                let gamma = params.gamma.evaluate(layer.normalized_t);
+                let offset = params.offset;
+                if exp.abs() > 0.01 || (gamma - 1.0).abs() > 0.01 || offset.abs() > 0.01 {
+                    exposure::apply_exposure(img, exp, gamma, offset)
                 } else {
                     img
                 }
@@ -96,6 +99,9 @@ pub fn apply_pixel_effects(
             EffectType::ColorTint(params) => {
                 let color = [params.tint[0], params.tint[1], params.tint[2], 1.0];
                 color_tint::apply_color_fill(img, color, 1.0)
+            }
+            EffectType::Colorize(params) => {
+                colorize::apply_colorize(img, params.tint[0], params.tint[1])
             }
             EffectType::FindEdges(params) => {
                 find_edges::find_edges(img, params.smoothing, params.threshold, params.invert)

@@ -62,6 +62,10 @@ enum Commands {
         #[arg(long)]
         debug_effects: bool,
 
+        /// Downscale factor for proxy rendering (e.g. 0.25 for quarter size).
+        #[arg(long)]
+        proxy_scale: Option<f32>,
+
         /// Path to a TOML config file for disabling effects.
         #[arg(long)]
         config: Option<PathBuf>,
@@ -103,7 +107,7 @@ fn main() -> Result<()> {
     match args.command {
         Commands::Info { input } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
-            let project = convert_project(&xml_scene)?;
+            let project = convert_project(&xml_scene, None)?;
             println!(
                 "Project: {}",
                 project.title.as_deref().unwrap_or("Untitled")
@@ -141,6 +145,7 @@ fn main() -> Result<()> {
             auto_pair,
             debug_layout,
             debug_effects,
+            proxy_scale,
             config,
             start_frame,
             end_frame,
@@ -155,7 +160,7 @@ fn main() -> Result<()> {
             let disabled = config.disabled_effects_slice();
 
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
-            let project = convert_project(&xml_scene)?;
+            let project = convert_project(&xml_scene, proxy_scale)?;
 
             if frame.is_some()
                 && (start_frame.is_some()

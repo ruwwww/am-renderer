@@ -9,18 +9,42 @@ use crate::model::*;
 use crate::parser::types::*;
 use crate::render::parse_hex_color;
 
-pub fn convert_project(xml: &XmlScene) -> Result<Project> {
-    let width = xml.width.parse().context("invalid scene width")?;
-    let height = xml.height.parse().context("invalid scene height")?;
+fn scale_animated_vec3(mut anim: Animated<[f32; 3]>, scale: f32) -> Animated<[f32; 3]> {
+    if (scale - 1.0).abs() < 0.0001 {
+        return anim;
+    }
+    match &mut anim {
+        Animated::Static(v) => {
+            v[0] *= scale;
+            v[1] *= scale;
+            v[2] *= scale;
+        }
+        Animated::Keyframed(kfs) => {
+            for kf in kfs {
+                kf.value[0] *= scale;
+                kf.value[1] *= scale;
+                kf.value[2] *= scale;
+            }
+        }
+    }
+    anim
+}
+
+pub fn convert_project(xml: &XmlScene, proxy_scale: Option<f32>) -> Result<Project> {
+    let scale = proxy_scale.unwrap_or(1.0);
+    let width = (xml.width.parse::<f32>().context("invalid scene width")? * scale).round() as u32;
+    let height = (xml.height.parse::<f32>().context("invalid scene height")? * scale).round() as u32;
     let export_width = xml
         .export_width
         .as_deref()
-        .and_then(|w| w.parse().ok())
+        .and_then(|w| w.parse::<f32>().ok())
+        .map(|w| (w * scale).round() as u32)
         .unwrap_or(width);
     let export_height = xml
         .export_height
         .as_deref()
-        .and_then(|h| h.parse().ok())
+        .and_then(|h| h.parse::<f32>().ok())
+        .map(|h| (h * scale).round() as u32)
         .unwrap_or(height);
 
     let bg_color = xml
@@ -32,7 +56,7 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
     // Coordinate scale: XML uses a logical coordinate system where
     // 1 logical unit = 2 pixels at the render canvas resolution.
     // See AGENTS.md for full documentation.
-    let coord_scale = 2.0;
+    let coord_scale = 2.0 * scale;
 
     let total_time = xml.total_time.parse().context("invalid totalTime")?;
     let fps = xml.fps.parse().context("invalid fps")?;
@@ -57,7 +81,7 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
                 location: t
                     .location
                     .as_ref()
-                    .map(|l| convert_animated_vec3(l, [0.0, 0.0, 0.0]))
+                    .map(|l| scale_animated_vec3(convert_animated_vec3(l, [0.0, 0.0, 0.0]), scale))
                     .unwrap_or(Animated::Static([0.0, 0.0, 0.0])),
                 scale: t
                     .scale
@@ -142,7 +166,7 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
             Some("darken") => BlendMode::Darken,
             Some("lighten") => BlendMode::Lighten,
             Some("subtract") => BlendMode::Subtract,
-            Some("add") => BlendMode::Add,
+            Some("add") | Some("linear-dodge") => BlendMode::Add,
             _ => BlendMode::Normal,
         };
 
@@ -160,7 +184,7 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
         let effects = shape
             .effects
             .iter()
-            .map(|e| convert_effect(e, coord_scale))
+            .map(|e| convert_effect(e, coord_scale, scale))
             .collect();
 
         layers.push(Layer {
@@ -419,6 +443,16 @@ fn get_prop_color3(properties: &[XmlProperty], name: &str, default_val: [f32; 3]
         .unwrap_or(default_val)
 }
 
+
+fn get_prop_vec3(properties: &[XmlProperty], name: &str, default_val: [f32; 3]) -> [f32; 3] {
+    properties
+        .iter()
+        .find(|p| p.name == name)
+        .and_then(|p| p.value.as_deref())
+        .map(|v| parse_vec3(v, default_val))
+        .unwrap_or(default_val)
+}
+
 fn get_prop_color4(properties: &[XmlProperty], name: &str, default_val: [f32; 4]) -> [f32; 4] {
     properties
         .iter()
@@ -428,7 +462,7 @@ fn get_prop_color4(properties: &[XmlProperty], name: &str, default_val: [f32; 4]
         .unwrap_or(default_val)
 }
 
-fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
+fn convert_effect(xml: &XmlEffect, coord_scale: f32, scale: f32) -> Effect {
     let locally_applied = xml
         .locally_applied
         .as_deref()
@@ -502,6 +536,9 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         "com.alightcreative.effects.colortint" => EffectType::ColorTint(ColorTintParams {
             tint: get_prop_color3(props, "tint", [1.0, 1.0, 1.0]),
         }),
+        "com.alightcreative.effects.colorize" => EffectType::Colorize(ColorizeParams {
+            tint: get_prop_vec3(props, "tint", [0.0, 0.0, 0.0]),
+        }),
         "com.alightcreative.effects.highlightshadow" => {
             EffectType::HighlightShadow(HighlightShadowParams {
                 highlights: get_prop_float(props, "highlights", 0.0),
@@ -551,7 +588,7 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         "com.alightcreative.effects.offset" => EffectType::Offset(OffsetParams {
             offset: {
                 let raw_offset = get_prop_vec2(props, "offset", [0.0, 0.0]);
-                [raw_offset[0], raw_offset[1]]
+                [raw_offset[0] * scale, raw_offset[1] * scale]
             },
             feather: get_prop_float(props, "feather", 0.0),
             mask: get_prop_bool(props, "mask", false),
@@ -564,8 +601,8 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32) -> Effect {
         "com.alightcreative.effects.stretchsegment" => {
             EffectType::StretchSegment(StretchSegmentParams {
                 angle: get_prop_float(props, "angle", 0.0),
-                stretch: get_prop_float(props, "stretch", 0.0),
-                offset: get_prop_float(props, "offset", 0.0),
+                stretch: get_prop_float(props, "stretch", 0.0) * scale,
+                offset: get_prop_float(props, "offset", 0.0) * scale,
                 smooth: get_prop_float(props, "smooth", 0.0),
             })
         }
