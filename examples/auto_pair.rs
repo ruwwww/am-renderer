@@ -42,19 +42,19 @@ fn main() -> Result<()> {
     let mut image_uris = HashSet::new();
     let mut audio_uris = HashSet::new();
 
-    for shape in &xml_scene.shapes {
+    for shape in xml_scene.shapes() {
         if shape.fill_type.as_deref() == Some("media") || shape.fill_image.is_some() {
             if let Some(ref uri) = shape.fill_image {
                 image_uris.insert(uri.clone());
             }
         }
     }
-    for audio in &xml_scene.audio {
+    for audio in xml_scene.audio() {
         if let Some(ref uri) = audio.src {
             audio_uris.insert(uri.clone());
         }
     }
-    for media in &xml_scene.media {
+    for media in xml_scene.media() {
         let is_audio = media
             .r#type
             .as_deref()

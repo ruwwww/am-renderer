@@ -280,7 +280,6 @@ pub struct XmlShape {
     pub hidden: Option<String>,
 
     // -- child elements ------------------------------------------------------
-
     /// Transform (location / scale / rotation / opacity).
     #[serde(default)]
     pub transform: Option<XmlTransform>,
@@ -363,6 +362,20 @@ pub struct XmlBookmark {
 // Scene (root)
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Deserialize)]
+pub enum XmlSceneElement {
+    #[serde(rename = "media")]
+    Media(XmlMedia),
+    #[serde(rename = "bookmark")]
+    Bookmark(XmlBookmark),
+    #[serde(rename = "audio")]
+    Audio(XmlAudio),
+    #[serde(rename = "shape")]
+    Shape(XmlShape),
+    #[serde(other)]
+    Unknown,
+}
+
 /// Root `<scene>` element – the top-level container for an Alight Motion project.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -428,20 +441,53 @@ pub struct XmlScene {
     pub retime: Option<String>,
 
     // -- child elements ------------------------------------------------------
+    /// Scene elements.
+    #[serde(rename = "$value", default)]
+    pub elements: Vec<XmlSceneElement>,
+}
 
-    /// Imported media assets.
-    #[serde(rename = "media", default)]
-    pub media: Vec<XmlMedia>,
+impl XmlScene {
+    /// Get references to all `<media>` elements.
+    pub fn media(&self) -> Vec<&XmlMedia> {
+        self.elements
+            .iter()
+            .filter_map(|e| match e {
+                XmlSceneElement::Media(m) => Some(m),
+                _ => None,
+            })
+            .collect()
+    }
 
-    /// Timeline bookmarks.
-    #[serde(rename = "bookmark", default)]
-    pub bookmarks: Vec<XmlBookmark>,
+    /// Get references to all `<bookmark>` elements.
+    pub fn bookmarks(&self) -> Vec<&XmlBookmark> {
+        self.elements
+            .iter()
+            .filter_map(|e| match e {
+                XmlSceneElement::Bookmark(b) => Some(b),
+                _ => None,
+            })
+            .collect()
+    }
 
-    /// Audio layers.
-    #[serde(rename = "audio", default)]
-    pub audio: Vec<XmlAudio>,
+    /// Get references to all `<audio>` elements.
+    pub fn audio(&self) -> Vec<&XmlAudio> {
+        self.elements
+            .iter()
+            .filter_map(|e| match e {
+                XmlSceneElement::Audio(a) => Some(a),
+                _ => None,
+            })
+            .collect()
+    }
 
-    /// Shape (visual) layers.
-    #[serde(rename = "shape", default)]
-    pub shapes: Vec<XmlShape>,
+    /// Get references to all `<shape>` elements.
+    pub fn shapes(&self) -> Vec<&XmlShape> {
+        self.elements
+            .iter()
+            .filter_map(|e| match e {
+                XmlSceneElement::Shape(s) => Some(s),
+                _ => None,
+            })
+            .collect()
+    }
 }

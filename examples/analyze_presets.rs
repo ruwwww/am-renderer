@@ -17,14 +17,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let scene = parse_xml(&path)?;
             println!("Scene Title: {:?}", scene.title);
             println!("Scene Size: {}x{}", scene.width, scene.height);
-            println!("Total shapes: {}", scene.shapes.len());
+            println!("Total shapes: {}", scene.shapes().len());
 
             let mut media_shapes = 0;
             let mut shapes_with_size = 0;
             let mut shapes_without_size = 0;
 
-            for shape in &scene.shapes {
-                let is_media = shape.fill_type.as_deref() == Some("media") || shape.fill_image.is_some();
+            for shape in scene.shapes() {
+                let is_media =
+                    shape.fill_type.as_deref() == Some("media") || shape.fill_image.is_some();
                 if is_media {
                     media_shapes += 1;
                 }
@@ -36,9 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     shapes_without_size += 1;
                     println!(
                         "  Shape ID {} (label: {:?}, type: {:?}): NO 'size' property!",
-                        shape.id,
-                        shape.label,
-                        shape.s
+                        shape.id, shape.label, shape.s
                     );
                     // Print other properties to see what defines its dimensions
                     for prop in &shape.properties {
@@ -47,7 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            println!("Summary for {}:", path.file_name().unwrap().to_string_lossy());
+            println!(
+                "Summary for {}:",
+                path.file_name().unwrap().to_string_lossy()
+            );
             println!("  Media shapes: {}", media_shapes);
             println!("  Shapes with size: {}", shapes_with_size);
             println!("  Shapes without size: {}", shapes_without_size);

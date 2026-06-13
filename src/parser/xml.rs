@@ -36,9 +36,9 @@ pub fn parse_xml(path: &Path) -> Result<XmlScene> {
         "Parsed scene: {}x{}, {} media, {} shapes, {} audio layers",
         scene.width,
         scene.height,
-        scene.media.len(),
-        scene.shapes.len(),
-        scene.audio.len(),
+        scene.media().len(),
+        scene.shapes().len(),
+        scene.audio().len(),
     );
 
     Ok(scene)
@@ -60,9 +60,9 @@ mod tests {
         assert_eq!(scene.height, "1920");
         assert_eq!(scene.total_time, "5000");
         assert_eq!(scene.fps, "30");
-        assert!(scene.shapes.is_empty());
-        assert!(scene.audio.is_empty());
-        assert!(scene.media.is_empty());
+        assert!(scene.shapes().is_empty());
+        assert!(scene.audio().is_empty());
+        assert!(scene.media().is_empty());
     }
 
     /// Test parsing a scene with media, shapes, transforms, keyframes, effects,
@@ -138,29 +138,32 @@ mod tests {
         assert_eq!(scene.retime.as_deref(), Some("freeze"));
 
         // Media
-        assert_eq!(scene.media.len(), 2);
-        assert_eq!(scene.media[0].uri, "am-internal:///abc.mp3");
-        assert_eq!(scene.media[0].r#type.as_deref(), Some("audio/mpeg"));
-        assert_eq!(scene.media[1].width.as_deref(), Some("540"));
+        assert_eq!(scene.media().len(), 2);
+        assert_eq!(scene.media()[0].uri, "am-internal:///abc.mp3");
+        assert_eq!(scene.media()[0].r#type.as_deref(), Some("audio/mpeg"));
+        assert_eq!(scene.media()[1].width.as_deref(), Some("540"));
 
         // Bookmarks
-        assert_eq!(scene.bookmarks.len(), 1);
-        assert_eq!(scene.bookmarks[0].t, "5416");
+        assert_eq!(scene.bookmarks().len(), 1);
+        assert_eq!(scene.bookmarks()[0].t, "5416");
 
         // Audio
-        assert_eq!(scene.audio.len(), 1);
-        let audio = &scene.audio[0];
+        assert_eq!(scene.audio().len(), 1);
+        let audio = scene.audio()[0];
         assert_eq!(audio.id, "410972");
         assert_eq!(audio.start_time, "0");
         assert_eq!(audio.end_time, "5432");
         assert_eq!(audio.src.as_deref(), Some("am-internal:///abc.mp3"));
         let gain = audio.gain.as_ref().expect("gain missing");
         assert_eq!(gain.keyframes.len(), 2);
-        assert_eq!(gain.keyframes[1].e.as_deref(), Some("local cubicBezier 0.0 0.0 0.58 1.0"));
+        assert_eq!(
+            gain.keyframes[1].e.as_deref(),
+            Some("local cubicBezier 0.0 0.0 0.58 1.0")
+        );
 
         // Shape
-        assert_eq!(scene.shapes.len(), 1);
-        let shape = &scene.shapes[0];
+        assert_eq!(scene.shapes().len(), 1);
+        let shape = scene.shapes()[0];
         assert_eq!(shape.id, "410976");
         assert_eq!(shape.fill_type.as_deref(), Some("media"));
         assert_eq!(shape.blending.as_deref(), Some("multiply"));
@@ -193,7 +196,10 @@ mod tests {
         assert_eq!(shape.effects[0].id, "com.alightcreative.effects.tile");
         assert_eq!(shape.effects[0].properties.len(), 1);
         assert_eq!(shape.effects[0].properties[0].name, "mirror");
-        assert_eq!(shape.effects[0].properties[0].value.as_deref(), Some("true"));
+        assert_eq!(
+            shape.effects[0].properties[0].value.as_deref(),
+            Some("true")
+        );
 
         // Oscillate effect with animated properties
         assert_eq!(shape.effects[1].id, "com.alightcreative.effects.oscillate3");
@@ -202,7 +208,10 @@ mod tests {
         assert_eq!(shape.effects[1].properties[0].keyframes.len(), 2);
 
         // Motion blur effect with no properties
-        assert_eq!(shape.effects[2].id, "com.alightcreative.effects.motionblur3");
+        assert_eq!(
+            shape.effects[2].id,
+            "com.alightcreative.effects.motionblur3"
+        );
         assert!(shape.effects[2].properties.is_empty());
 
         // Fill colour
@@ -218,7 +227,10 @@ mod tests {
         // Top-level shape property
         assert_eq!(shape.properties.len(), 1);
         assert_eq!(shape.properties[0].name, "size");
-        assert_eq!(shape.properties[0].value.as_deref(), Some("540.000000,960.000000"));
+        assert_eq!(
+            shape.properties[0].value.as_deref(),
+            Some("540.000000,960.000000")
+        );
     }
 
     /// Ensure static opacity/rotation (value attr, no keyframes) parses.
@@ -237,9 +249,12 @@ mod tests {
 </scene>"#;
 
         let scene: XmlScene = quick_xml::de::from_str(xml).expect("parse failed");
-        let t = scene.shapes[0].transform.as_ref().unwrap();
+        let t = scene.shapes()[0].transform.as_ref().unwrap();
 
-        assert_eq!(t.location.as_ref().unwrap().value.as_deref(), Some("50.0,50.0,0.0"));
+        assert_eq!(
+            t.location.as_ref().unwrap().value.as_deref(),
+            Some("50.0,50.0,0.0")
+        );
         assert_eq!(t.scale.as_ref().unwrap().value.as_deref(), Some("1.0,1.0"));
         assert_eq!(t.rotation.as_ref().unwrap().value.as_deref(), Some("45.0"));
         assert_eq!(t.opacity.as_ref().unwrap().value.as_deref(), Some("0.5"));
@@ -262,11 +277,11 @@ mod tests {
 </scene>"#;
 
         let scene: XmlScene = quick_xml::de::from_str(xml).expect("parse failed");
-        assert_eq!(scene.media.len(), 2);
-        assert_eq!(scene.bookmarks.len(), 2);
-        assert_eq!(scene.audio.len(), 2);
-        assert_eq!(scene.shapes.len(), 3);
-        assert_eq!(scene.shapes[1].blending.as_deref(), Some("screen"));
-        assert_eq!(scene.shapes[2].hidden.as_deref(), Some("true"));
+        assert_eq!(scene.media().len(), 2);
+        assert_eq!(scene.bookmarks().len(), 2);
+        assert_eq!(scene.audio().len(), 2);
+        assert_eq!(scene.shapes().len(), 3);
+        assert_eq!(scene.shapes()[1].blending.as_deref(), Some("screen"));
+        assert_eq!(scene.shapes()[2].hidden.as_deref(), Some("true"));
     }
 }

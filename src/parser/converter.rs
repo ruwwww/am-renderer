@@ -37,11 +37,11 @@ pub fn convert_project(xml: &XmlScene) -> Result<Project> {
     let total_time = xml.total_time.parse().context("invalid totalTime")?;
     let fps = xml.fps.parse().context("invalid fps")?;
 
-    let media = xml.media.iter().map(convert_media).collect();
-    let audio_tracks = xml.audio.iter().map(convert_audio).collect();
+    let media = xml.media().into_iter().map(convert_media).collect();
+    let audio_tracks = xml.audio().into_iter().map(convert_audio).collect();
 
     let mut layers = Vec::new();
-    for shape in &xml.shapes {
+    for shape in xml.shapes() {
         let id = shape.id.parse().unwrap_or(0);
         let label = shape.label.clone();
         let start_time = shape.start_time.parse().unwrap_or(0.0);
