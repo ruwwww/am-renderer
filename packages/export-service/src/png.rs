@@ -5,9 +5,9 @@ use image::RgbaImage;
 use rayon::prelude::*;
 use std::path::Path;
 
-use crate::eval::timeline::evaluate;
-use crate::model::Project;
-use crate::render::compositor::{render_scene, ImageCache};
+use graph_resolver::eval::timeline::evaluate;
+use graph_resolver::model::Project;
+use renderer_core::compositor::{render_scene, ImageCache};
 
 /// Export a single frame image as a PNG file.
 pub fn export_frame(image: &RgbaImage, output_dir: &Path, frame_number: u32) -> Result<()> {
@@ -50,7 +50,7 @@ pub fn export_sequence(
 
     // Pre-load all media assets into the shared cache (serial, avoids duplicate disk reads)
     for layer in &project.layers {
-        if layer.fill_type == crate::model::FillType::Media {
+        if layer.fill_type == graph_resolver::model::FillType::Media {
             if let Some(ref uri) = layer.fill_image {
                 let _ = cache.load(uri, assets_dir);
             }

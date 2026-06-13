@@ -1,5 +1,5 @@
 use super::utils::to_rgba_u8;
-use crate::model::{Gradient, GradientStop};
+use graph_resolver::model::{Gradient, GradientStop};
 use image::RgbaImage;
 
 /// Render a gradient into an image buffer.

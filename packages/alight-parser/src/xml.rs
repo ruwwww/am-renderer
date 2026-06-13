@@ -20,7 +20,7 @@ use super::types::XmlScene;
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use am_renderer::parser::parse_xml;
+/// use alight_parser::parse_xml;
 ///
 /// let scene = parse_xml(Path::new("project.xml")).unwrap();
 /// println!("Scene size: {}x{}", scene.width, scene.height);

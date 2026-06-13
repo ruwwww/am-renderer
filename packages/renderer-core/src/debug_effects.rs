@@ -3,9 +3,9 @@ use image::{Rgba, RgbaImage};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
-use crate::eval::timeline::ResolvedScene;
-use crate::model::Effect;
-use crate::render::compositor::{render_scene, ImageCache};
+use graph_resolver::eval::timeline::ResolvedScene;
+use graph_resolver::model::Effect;
+use crate::compositor::{render_scene, ImageCache};
 
 const DEBUG_SUBDIR: &str = "debug_effects";
 const TILE_GAP: u32 = 4;
@@ -189,7 +189,7 @@ fn build_cumulative_tile(
     fn draw_label(img: &mut RgbaImage, x: u32, y: u32, text: &str, color: Rgba<u8>) {
         let mut cx = x;
         for c in text.chars() {
-            crate::render::debug_layout::draw_char(img, cx as i32, y as i32, c, color, 1);
+            crate::debug_layout::draw_char(img, cx as i32, y as i32, c, color, 1);
             cx += 4;
         }
     }
@@ -233,7 +233,7 @@ fn build_cumulative_tile(
     Ok(canvas)
 }
 
-fn effect_type_short_name(et: &crate::model::EffectType) -> String {
+fn effect_type_short_name(et: &graph_resolver::model::EffectType) -> String {
     let s = format!("{:?}", et);
     let base = s.split('(').next().unwrap_or("unknown");
     base.chars()

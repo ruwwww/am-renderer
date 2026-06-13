@@ -15,15 +15,15 @@ pub mod shape;
 pub mod utils;
 
 pub use cache::ImageCache;
-pub use utils::parse_hex_color;
+pub use graph_resolver::utils::parse_hex_color;
 
-use crate::eval::timeline::ResolvedScene;
-use crate::eval::transform::{build_transform_matrix, invert_transform, transform_point};
-use crate::model::{FillType, ResolvedLayer};
-use crate::render::blending::blend_pixel;
-use crate::render::debug_layout::{draw_layer_debug_outline, draw_rect, draw_text};
-use crate::render::effects::lift::apply_lift;
-use crate::render::effects::transform::apply_transform_effects;
+use graph_resolver::eval::timeline::ResolvedScene;
+use graph_resolver::eval::transform::{build_transform_matrix, invert_transform, transform_point};
+use graph_resolver::model::{FillType, ResolvedLayer};
+use crate::blending::blend_pixel;
+use crate::debug_layout::{draw_layer_debug_outline, draw_rect, draw_text};
+use crate::effects::lift::apply_lift;
+use crate::effects::transform::apply_transform_effects;
 use anyhow::Result;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
@@ -192,7 +192,7 @@ pub fn render_scene(
                 let blended = blend_pixel(
                     canvas_pixel,
                     comp_pixel,
-                    crate::model::BlendMode::Normal,
+                    graph_resolver::model::BlendMode::Normal,
                     1.0,
                 );
                 canvas.put_pixel(x, y, blended);
@@ -373,11 +373,11 @@ fn render_layer(
             .iter()
             .any(|d| d == e.effect_type.type_name())
             && !e.locally_applied
-            && matches!(e.effect_type, crate::model::EffectType::Swirl(_))
+            && matches!(e.effect_type, graph_resolver::model::EffectType::Swirl(_))
     });
 
-    let post_swirl_params = if let Some(crate::model::Effect {
-        effect_type: crate::model::EffectType::Swirl(ref params),
+    let post_swirl_params = if let Some(graph_resolver::model::Effect {
+        effect_type: graph_resolver::model::EffectType::Swirl(ref params),
         ..
     }) = post_swirl
     {
@@ -396,11 +396,11 @@ fn render_layer(
             .iter()
             .any(|d| d == e.effect_type.type_name())
             && !e.locally_applied
-            && matches!(e.effect_type, crate::model::EffectType::Tile(_))
+            && matches!(e.effect_type, graph_resolver::model::EffectType::Tile(_))
     });
 
-    let post_tile_params = if let Some(crate::model::Effect {
-        effect_type: crate::model::EffectType::Tile(ref params),
+    let post_tile_params = if let Some(graph_resolver::model::Effect {
+        effect_type: graph_resolver::model::EffectType::Tile(ref params),
         ..
     }) = post_tile
     {
@@ -418,9 +418,9 @@ fn render_layer(
             .iter()
             .any(|d| d == e.effect_type.type_name())
             && !e.locally_applied
-            && matches!(e.effect_type, crate::model::EffectType::Wipe(_))
+            && matches!(e.effect_type, graph_resolver::model::EffectType::Wipe(_))
     }).map(|e| {
-        if let crate::model::EffectType::Wipe(ref params) = e.effect_type {
+        if let graph_resolver::model::EffectType::Wipe(ref params) = e.effect_type {
             let start = params.start.evaluate(layer.normalized_t);
             let end = params.end.evaluate(layer.normalized_t);
             let angle = params.angle.evaluate(layer.normalized_t);
@@ -653,7 +653,7 @@ fn create_layer_source(
         && layer
             .effects
             .iter()
-            .any(|e| matches!(e.effect_type, crate::model::EffectType::Lift(_)));
+            .any(|e| matches!(e.effect_type, graph_resolver::model::EffectType::Lift(_)));
     let has_effects = layer.effects.iter().any(|e| {
         !disabled_effects
             .iter()
@@ -673,7 +673,7 @@ fn create_layer_source(
             .effects
             .iter()
             .find_map(|e| {
-                if let crate::model::EffectType::Lift(ref params) = e.effect_type {
+                if let graph_resolver::model::EffectType::Lift(ref params) = e.effect_type {
                     Some(params)
                 } else {
                     None
@@ -708,7 +708,7 @@ fn create_layer_source(
     };
 
     img =
-        crate::render::effects::apply_pixel_effects(&layer.effects, img, layer, disabled_effects)?;
+        crate::effects::apply_pixel_effects(&layer.effects, img, layer, disabled_effects)?;
 
     Ok(img)
 }
@@ -716,10 +716,10 @@ fn create_layer_source(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::animation::Animated;
-    use crate::model::effect::TileParams;
-    use crate::model::layer::{BlendMode, FillType};
-    use crate::model::{Effect, EffectType};
+    use graph_resolver::model::animation::Animated;
+    use graph_resolver::model::effect::TileParams;
+    use graph_resolver::model::layer::{BlendMode, FillType};
+    use graph_resolver::model::{Effect, EffectType};
     use std::path::PathBuf;
 
     #[test]

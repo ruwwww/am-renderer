@@ -6,7 +6,7 @@ use std::path::Path;
 use super::cache::ImageCache;
 use super::gradient::render_gradient;
 use super::utils::to_rgba_u8;
-use crate::model::{FillType, ResolvedLayer};
+use graph_resolver::model::{FillType, ResolvedLayer};
 
 /// Create the base shape image source without any lift (background copy) effect.
 pub(crate) fn create_base_shape_source(

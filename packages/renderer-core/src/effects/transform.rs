@@ -1,4 +1,4 @@
-use crate::model::{Effect, EffectType};
+use graph_resolver::model::{Effect, EffectType};
 
 pub fn apply_transform_effects(
     effects: &[Effect],
@@ -67,8 +67,8 @@ fn simple_noise(seed: f32, evolution: f32, offset: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::effect::OscillateParams;
-    use crate::model::Animated;
+    use graph_resolver::model::effect::OscillateParams;
+    use graph_resolver::model::Animated;
 
     #[test]
     fn test_oscillate_effect_over_time() {

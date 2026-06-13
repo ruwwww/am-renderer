@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::model::AudioTrack;
+use graph_resolver::model::AudioTrack;
 
 /// Shells out to ffmpeg to stitch PNG frames and mixed audio tracks into an MP4 video.
 pub fn export_mp4(

@@ -2,9 +2,9 @@
 //!
 //! Provides line, rectangle, pixel font, and bounding-box outline drawing.
 
-use crate::eval::transform::{build_transform_matrix, transform_point};
-use crate::model::ResolvedLayer;
-use crate::render::effects::transform::apply_transform_effects;
+use graph_resolver::eval::transform::{build_transform_matrix, transform_point};
+use graph_resolver::model::ResolvedLayer;
+use crate::effects::transform::apply_transform_effects;
 use image::{Rgba, RgbaImage};
 
 pub fn draw_line(img: &mut RgbaImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgba<u8>) {

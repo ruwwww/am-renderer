@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use crate::model::effect::*;
-use crate::model::*;
-use crate::parser::types::*;
-use crate::render::parse_hex_color;
+use graph_resolver::model::effect::*;
+use graph_resolver::model::*;
+use crate::types::*;
+use graph_resolver::utils::parse_hex_color;
 
 fn scale_animated_vec3(mut anim: Animated<[f32; 3]>, scale: f32) -> Animated<[f32; 3]> {
     if (scale - 1.0).abs() < 0.0001 {

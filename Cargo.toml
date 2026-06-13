@@ -5,15 +5,10 @@ edition = "2021"
 description = "Headless renderer for Alight Motion XML projects"
 
 [dependencies]
-# XML parsing
-quick-xml = { version = "0.37", features = ["serialize"] }
-serde = { version = "1", features = ["derive"] }
-
-# Image processing
-image = "0.25"
-
-# Math
-glam = { version = "0.29", features = ["serde"] }
+graph-resolver = { path = "packages/graph-resolver" }
+alight-parser = { path = "packages/alight-parser" }
+renderer-core = { path = "packages/renderer-core" }
+export-service = { path = "packages/export-service" }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -24,13 +19,20 @@ thiserror = "2"
 
 # Config file
 toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+image = "0.25"
 
 # Logging
 log = "0.4"
 env_logger = "0.11"
 
-# Parallelism
-rayon = "1"
+[workspace]
+members = [
+    "packages/graph-resolver",
+    "packages/alight-parser",
+    "packages/renderer-core",
+    "packages/export-service",
+]
 
 [profile.release]
 opt-level = 3

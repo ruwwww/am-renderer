@@ -2,14 +2,13 @@ use anyhow::Result;
 use image::RgbaImage;
 use log::warn;
 
-use crate::model::{Effect, EffectType, ResolvedLayer};
+use graph_resolver::model::{Effect, EffectType, ResolvedLayer};
 
 pub mod blink;
 pub mod brightness_contrast;
 pub mod color_tint;
 pub mod colorize;
 pub mod exposure;
-pub mod fade;
 pub mod find_edges;
 pub mod gaussian_blur;
 pub mod gradient_overlay;

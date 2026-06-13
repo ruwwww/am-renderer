@@ -3,7 +3,7 @@
 //! All blend modes operate in linear RGB space and handle alpha correctly
 //! using standard Porter-Duff "over" compositing with per-mode color blending.
 
-use crate::model::BlendMode;
+use graph_resolver::model::BlendMode;
 use image::Rgba;
 
 /// Blend a source pixel onto a destination pixel using the specified blend mode and opacity.
@@ -33,7 +33,7 @@ pub fn blend_pixel(dst: Rgba<u8>, src: Rgba<u8>, mode: BlendMode, opacity: f32) 
 
     // For non-Normal blend modes, scale source alpha by destination alpha
     // to prevent blend mode colors from leaking onto transparent backgrounds.
-    if mode != crate::model::BlendMode::Normal {
+    if mode != graph_resolver::model::BlendMode::Normal {
         sa *= da;
     }
 

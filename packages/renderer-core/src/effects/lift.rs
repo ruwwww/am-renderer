@@ -1,7 +1,7 @@
 use anyhow::Result;
 use image::RgbaImage;
 
-use crate::eval::transform::transform_point;
+use graph_resolver::eval::transform::transform_point;
 
 pub fn apply_lift(
     w: u32,
