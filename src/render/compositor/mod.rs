@@ -412,6 +412,51 @@ fn render_layer(
         None
     };
 
+    // Find all post-transform Wipe effects (locallyApplied = false)
+    let post_wipes: Vec<_> = layer.effects.iter().filter(|e| {
+        !disabled_effects
+            .iter()
+            .any(|d| d == e.effect_type.type_name())
+            && !e.locally_applied
+            && matches!(e.effect_type, crate::model::EffectType::Wipe(_))
+    }).map(|e| {
+        if let crate::model::EffectType::Wipe(ref params) = e.effect_type {
+            let start = params.start.evaluate(layer.normalized_t);
+            let end = params.end.evaluate(layer.normalized_t);
+            let angle = params.angle.evaluate(layer.normalized_t);
+            let feather = params.feather;
+            (start, end, angle, feather)
+        } else {
+            unreachable!()
+        }
+    }).collect();
+
+    struct PostWipeEval {
+        cos_a: f32,
+        sin_a: f32,
+        min_proj: f32,
+        range: f32,
+        s: f32,
+        e: f32,
+        feather_u: f32,
+    }
+
+    let post_wipes_eval: Vec<PostWipeEval> = post_wipes.iter().map(|&(start, end, angle, feather)| {
+        let angle_rad = angle.to_radians();
+        let cos_a = angle_rad.cos();
+        let sin_a = angle_rad.sin();
+        let p00 = 0.0f32;
+        let p_w0 = canvas_w * cos_a;
+        let p0_h = canvas_h * sin_a;
+        let p_wh = canvas_w * cos_a + canvas_h * sin_a;
+        let min_proj = p00.min(p_w0).min(p0_h).min(p_wh);
+        let max_proj = p00.max(p_w0).max(p0_h).max(p_wh);
+        let range = (max_proj - min_proj).max(0.001);
+        let (s, e) = if start <= end { (start, end) } else { (end, start) };
+        let feather_u = if feather > 0.0 { feather / range } else { 0.0 };
+        PostWipeEval { cos_a, sin_a, min_proj, range, s, e, feather_u }
+    }).collect();
+
     let canvas_h_f = canvas_h_u as f32;
     let center_x = location[0];
     let center_y = location[1];
@@ -535,9 +580,42 @@ fn render_layer(
                     }
                 };
 
-                let src_pixel = *source.get_pixel(sx, sy);
+                let mut src_pixel = *source.get_pixel(sx, sy);
                 if src_pixel[3] == 0 {
                     continue;
+                }
+
+                if !post_wipes_eval.is_empty() {
+                    let mut wipe_factor = 1.0f32;
+                    for pw in &post_wipes_eval {
+                        let proj = cx as f32 * pw.cos_a + cy as f32 * pw.sin_a;
+                        let u = (proj - pw.min_proj) / pw.range;
+                        let f = if u < pw.s {
+                            if pw.feather_u > 0.0 {
+                                ((pw.feather_u - (pw.s - u)) / pw.feather_u).clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            }
+                        } else if u > pw.e {
+                            if pw.feather_u > 0.0 {
+                                ((pw.feather_u - (u - pw.e)) / pw.feather_u).clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            1.0
+                        };
+                        wipe_factor *= f;
+                        if wipe_factor <= 0.0 {
+                            break;
+                        }
+                    }
+                    if wipe_factor < 1.0 {
+                        src_pixel[3] = (src_pixel[3] as f32 * wipe_factor).round() as u8;
+                        if src_pixel[3] == 0 {
+                            continue;
+                        }
+                    }
                 }
 
                 let dst_pixel = *canvas.get_pixel(cx, cy);

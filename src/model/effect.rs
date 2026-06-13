@@ -74,6 +74,8 @@ pub enum EffectType {
     Spin(SpinParams),
     /// Swirl warp effect.
     Swirl(SwirlParams),
+    /// Wipe transition/mask effect.
+    Wipe(WipeParams),
 
     /// Unknown or unsupported effect — stores the raw effect ID from XML.
     Unknown(String),
@@ -109,6 +111,7 @@ impl EffectType {
             EffectType::StretchSegment(_) => "StretchSegment",
             EffectType::Spin(_) => "Spin",
             EffectType::Swirl(_) => "Swirl",
+            EffectType::Wipe(_) => "Wipe",
             EffectType::Unknown(_) => "Unknown",
         }
     }
@@ -630,6 +633,30 @@ impl Default for ColorizeParams {
     fn default() -> Self {
         Self {
             tint: [0.0, 0.0, 0.0],
+        }
+    }
+}
+
+/// Parameters for Wipe transition/mask effect.
+#[derive(Debug, Clone)]
+pub struct WipeParams {
+    /// Starting progress of the wipe mask (0.0 to 1.0)
+    pub start: Animated<f32>,
+    /// Ending progress of the wipe mask (0.0 to 1.0)
+    pub end: Animated<f32>,
+    /// Angle of the wipe transition in degrees
+    pub angle: Animated<f32>,
+    /// Softness of the wipe boundary in pixels
+    pub feather: f32,
+}
+
+impl Default for WipeParams {
+    fn default() -> Self {
+        Self {
+            start: Animated::Static(0.0),
+            end: Animated::Static(1.0),
+            angle: Animated::Static(0.0),
+            feather: 0.0,
         }
     }
 }

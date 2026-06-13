@@ -26,6 +26,7 @@ pub mod swirl;
 pub mod tile;
 pub mod transform;
 pub mod vignette;
+pub mod wipe;
 
 pub use transform::apply_transform_effects;
 
@@ -186,6 +187,16 @@ pub fn apply_pixel_effects(
             EffectType::Lift(_) => img,
             // Fade handled separately in resolve_layer
             EffectType::Fade(_) => img,
+            EffectType::Wipe(params) => {
+                if effect.locally_applied {
+                    let start = params.start.evaluate(layer.normalized_t);
+                    let end = params.end.evaluate(layer.normalized_t);
+                    let angle = params.angle.evaluate(layer.normalized_t);
+                    wipe::apply_wipe(img, start, end, angle, params.feather)
+                } else {
+                    img
+                }
+            }
             EffectType::Unknown(id) => {
                 warn!("Unknown effect type skipped: {}", id);
                 img

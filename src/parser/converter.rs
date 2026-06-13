@@ -625,6 +625,14 @@ fn convert_effect(xml: &XmlEffect, coord_scale: f32, scale: f32) -> Effect {
         "com.alightcreative.effects.spin" => EffectType::Spin(SpinParams {
             rpm: get_prop_animated_float(props, "rpm", 0.0),
         }),
+        "com.alightcreative.effects.wipe2" | "com.alightcreative.effects.wipe" => {
+            EffectType::Wipe(WipeParams {
+                start: get_prop_animated_float(props, "start", 0.0),
+                end: get_prop_animated_float(props, "end", 1.0),
+                angle: get_prop_animated_float(props, "angle", 0.0),
+                feather: get_prop_float(props, "feather", 0.0),
+            })
+        }
         other => EffectType::Unknown(other.to_string()),
     };
 
