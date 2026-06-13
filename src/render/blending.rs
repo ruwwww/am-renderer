@@ -58,16 +58,8 @@ pub fn blend_pixel(dst: Rgba<u8>, src: Rgba<u8>, mode: BlendMode, opacity: f32) 
         ),
         BlendMode::Darken => (sr.min(dr), sg.min(dg), sb.min(db)),
         BlendMode::Lighten => (sr.max(dr), sg.max(dg), sb.max(db)),
-        BlendMode::Subtract => (
-            (dr - sr).max(0.0),
-            (dg - sg).max(0.0),
-            (db - sb).max(0.0),
-        ),
-        BlendMode::Add => (
-            (dr + sr).min(1.0),
-            (dg + sg).min(1.0),
-            (db + sb).min(1.0),
-        ),
+        BlendMode::Subtract => ((dr - sr).max(0.0), (dg - sg).max(0.0), (db - sb).max(0.0)),
+        BlendMode::Add => ((dr + sr).min(1.0), (dg + sg).min(1.0), (db + sb).min(1.0)),
     };
 
     // Porter-Duff "over" compositing with W3C blending

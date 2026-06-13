@@ -36,46 +36,46 @@ pub fn apply_vignette(
     let rx = rx.max(1.0);
     let ry = ry.max(1.0);
 
-    raw.par_chunks_mut(stride)
-        .enumerate()
-        .for_each(|(y, row)| {
-            let dy = y as f32 - cy;
+    raw.par_chunks_mut(stride).enumerate().for_each(|(y, row)| {
+        let dy = y as f32 - cy;
 
-            for x in 0..w_u {
-                let dx = x as f32 - cx;
+        for x in 0..w_u {
+            let dx = x as f32 - cx;
 
-                let nx = dx / rx;
-                let ny = dy / ry;
-                let d = (nx * nx + ny * ny).sqrt() / scale;
+            let nx = dx / rx;
+            let ny = dy / ry;
+            let d = (nx * nx + ny * ny).sqrt() / scale;
 
-                let vignette = if d < 1.0 - feather {
-                    1.0
-                } else if d > 1.0 {
-                    1.0 - strength
-                } else {
-                    let t = (d - (1.0 - feather)) / feather;
-                    1.0 - t * strength
-                };
+            let vignette = if d < 1.0 - feather {
+                1.0
+            } else if d > 1.0 {
+                1.0 - strength
+            } else {
+                let t = (d - (1.0 - feather)) / feather;
+                1.0 - t * strength
+            };
 
-                let idx = x * 4;
+            let idx = x * 4;
 
-                if punchout {
-                    let original_a = row[idx + 3] as f32 / 255.0;
-                    let final_a = (original_a * vignette * 255.0).round().clamp(0.0, 255.0) as u8;
-                    row[idx + 3] = final_a;
-                } else {
-                    let blend_factor = (1.0 - vignette) * tint;
+            if punchout {
+                let original_a = row[idx + 3] as f32 / 255.0;
+                let final_a = (original_a * vignette * 255.0).round().clamp(0.0, 255.0) as u8;
+                row[idx + 3] = final_a;
+            } else {
+                let blend_factor = (1.0 - vignette) * tint;
 
-                    let r = row[idx] as f32 * (1.0 - blend_factor) + overlay_r as f32 * blend_factor;
-                    let g = row[idx + 1] as f32 * (1.0 - blend_factor) + overlay_g as f32 * blend_factor;
-                    let b = row[idx + 2] as f32 * (1.0 - blend_factor) + overlay_b as f32 * blend_factor;
+                let r = row[idx] as f32 * (1.0 - blend_factor) + overlay_r as f32 * blend_factor;
+                let g =
+                    row[idx + 1] as f32 * (1.0 - blend_factor) + overlay_g as f32 * blend_factor;
+                let b =
+                    row[idx + 2] as f32 * (1.0 - blend_factor) + overlay_b as f32 * blend_factor;
 
-                    row[idx] = r.round().clamp(0.0, 255.0) as u8;
-                    row[idx + 1] = g.round().clamp(0.0, 255.0) as u8;
-                    row[idx + 2] = b.round().clamp(0.0, 255.0) as u8;
-                }
+                row[idx] = r.round().clamp(0.0, 255.0) as u8;
+                row[idx + 1] = g.round().clamp(0.0, 255.0) as u8;
+                row[idx + 2] = b.round().clamp(0.0, 255.0) as u8;
             }
-        });
+        }
+    });
 
     img
 }

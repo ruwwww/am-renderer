@@ -1,7 +1,13 @@
 use image::RgbaImage;
 use rayon::prelude::*;
 
-pub fn apply_stretch_segment(img: RgbaImage, angle: f32, stretch: f32, offset: f32, smooth: f32) -> RgbaImage {
+pub fn apply_stretch_segment(
+    img: RgbaImage,
+    angle: f32,
+    stretch: f32,
+    offset: f32,
+    smooth: f32,
+) -> RgbaImage {
     let w = img.width() as usize;
     let h = img.height() as usize;
     let mut result = RgbaImage::new(w as u32, h as u32);
@@ -34,18 +40,24 @@ pub fn apply_stretch_segment(img: RgbaImage, angle: f32, stretch: f32, offset: f
                 let (sx, sy) = if proj > half_stretch {
                     let src_x = x as f32 - cos_a * half_stretch * smooth_scale_outside;
                     let src_y = y as f32 - sin_a * half_stretch * smooth_scale_outside;
-                    (src_x.round().clamp(0.0, w_m1) as usize,
-                     src_y.round().clamp(0.0, h_m1) as usize)
+                    (
+                        src_x.round().clamp(0.0, w_m1) as usize,
+                        src_y.round().clamp(0.0, h_m1) as usize,
+                    )
                 } else if proj < -half_stretch {
                     let src_x = x as f32 + cos_a * half_stretch * smooth_scale_outside;
                     let src_y = y as f32 + sin_a * half_stretch * smooth_scale_outside;
-                    (src_x.round().clamp(0.0, w_m1) as usize,
-                     src_y.round().clamp(0.0, h_m1) as usize)
+                    (
+                        src_x.round().clamp(0.0, w_m1) as usize,
+                        src_y.round().clamp(0.0, h_m1) as usize,
+                    )
                 } else {
                     let src_x = x as f32 - proj * cos_a * smooth_scale_outside;
                     let src_y = y as f32 - proj * sin_a * smooth_scale_outside;
-                    (src_x.round().clamp(0.0, w_m1) as usize,
-                     src_y.round().clamp(0.0, h_m1) as usize)
+                    (
+                        src_x.round().clamp(0.0, w_m1) as usize,
+                        src_y.round().clamp(0.0, h_m1) as usize,
+                    )
                 };
 
                 let src_idx = sy * stride + sx * 4;

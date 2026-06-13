@@ -1,4 +1,4 @@
-use image::{RgbaImage, Rgba};
+use image::{Rgba, RgbaImage};
 use rayon::prelude::*;
 
 pub fn apply_offset(img: RgbaImage, dx: f32, dy: f32) -> RgbaImage {

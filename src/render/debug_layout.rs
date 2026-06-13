@@ -2,10 +2,10 @@
 //!
 //! Provides line, rectangle, pixel font, and bounding-box outline drawing.
 
-use image::{RgbaImage, Rgba};
+use crate::eval::transform::{build_transform_matrix, transform_point};
 use crate::model::ResolvedLayer;
 use crate::render::effects::transform::apply_transform_effects;
-use crate::eval::transform::{build_transform_matrix, transform_point};
+use image::{Rgba, RgbaImage};
 
 pub fn draw_line(img: &mut RgbaImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgba<u8>) {
     let dx = (x1 - x0).abs();
@@ -87,11 +87,19 @@ fn get_char_pixels(c: char) -> u16 {
         '.' => 0b000_000_000_000_010,
         '(' => 0b010_100_100_100_010,
         ')' => 0b010_001_001_001_010,
-        _   => 0b000_000_000_000_000,
+        _ => 0b000_000_000_000_000,
     }
 }
 
-pub fn draw_text_with_bg(img: &mut RgbaImage, x: i32, y: i32, text: &str, fg: Rgba<u8>, bg: Rgba<u8>, scale: i32) {
+pub fn draw_text_with_bg(
+    img: &mut RgbaImage,
+    x: i32,
+    y: i32,
+    text: &str,
+    fg: Rgba<u8>,
+    bg: Rgba<u8>,
+    scale: i32,
+) {
     let w = text.len() as i32 * 4 * scale;
     let h = 5 * scale;
     for dy in 0..h {
@@ -117,7 +125,8 @@ pub fn draw_char(img: &mut RgbaImage, x: i32, y: i32, c: char, color: Rgba<u8>, 
                     for dx in 0..scale {
                         let px = x + col * scale + dx;
                         let py = y + row * scale + dy;
-                        if px >= 0 && px < img.width() as i32 && py >= 0 && py < img.height() as i32 {
+                        if px >= 0 && px < img.width() as i32 && py >= 0 && py < img.height() as i32
+                        {
                             img.put_pixel(px as u32, py as u32, color);
                         }
                     }
@@ -199,18 +208,63 @@ pub fn draw_layer_debug_outline(
     let color = colors[(layer.id as usize) % colors.len()];
 
     // Draw outlines
-    draw_line(canvas, tl[0] as i32, tl[1] as i32, tr[0] as i32, tr[1] as i32, color);
-    draw_line(canvas, tr[0] as i32, tr[1] as i32, br[0] as i32, br[1] as i32, color);
-    draw_line(canvas, br[0] as i32, br[1] as i32, bl[0] as i32, bl[1] as i32, color);
-    draw_line(canvas, bl[0] as i32, bl[1] as i32, tl[0] as i32, tl[1] as i32, color);
+    draw_line(
+        canvas,
+        tl[0] as i32,
+        tl[1] as i32,
+        tr[0] as i32,
+        tr[1] as i32,
+        color,
+    );
+    draw_line(
+        canvas,
+        tr[0] as i32,
+        tr[1] as i32,
+        br[0] as i32,
+        br[1] as i32,
+        color,
+    );
+    draw_line(
+        canvas,
+        br[0] as i32,
+        br[1] as i32,
+        bl[0] as i32,
+        bl[1] as i32,
+        color,
+    );
+    draw_line(
+        canvas,
+        bl[0] as i32,
+        bl[1] as i32,
+        tl[0] as i32,
+        tl[1] as i32,
+        color,
+    );
 
     // Draw pivot crosshair at the layer's transform origin
     let pivot = transform_point(&fwd, [0.0, 0.0]);
-    draw_line(canvas, pivot[0] as i32 - 6, pivot[1] as i32, pivot[0] as i32 + 6, pivot[1] as i32, Rgba([255, 255, 255, 180]));
-    draw_line(canvas, pivot[0] as i32, pivot[1] as i32 - 6, pivot[0] as i32, pivot[1] as i32 + 6, Rgba([255, 255, 255, 180]));
+    draw_line(
+        canvas,
+        pivot[0] as i32 - 6,
+        pivot[1] as i32,
+        pivot[0] as i32 + 6,
+        pivot[1] as i32,
+        Rgba([255, 255, 255, 180]),
+    );
+    draw_line(
+        canvas,
+        pivot[0] as i32,
+        pivot[1] as i32 - 6,
+        pivot[0] as i32,
+        pivot[1] as i32 + 6,
+        Rgba([255, 255, 255, 180]),
+    );
 
     // Draw clean text label (two lines)
-    let clean_label: String = layer.label.as_deref().unwrap_or("Layer")
+    let clean_label: String = layer
+        .label
+        .as_deref()
+        .unwrap_or("Layer")
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
         .collect();
@@ -219,15 +273,28 @@ pub fn draw_layer_debug_outline(
     let label_y = tl[1] as i32 + 5;
     let bg = Rgba([26, 26, 26, 230]);
 
-    let line1 = format!("{} {}x{} @ {}%  {}x{}",
+    let line1 = format!(
+        "{} {}x{} @ {}%  {}x{}",
         clean_label,
-        layer_w as u32, layer_h as u32,
+        layer_w as u32,
+        layer_h as u32,
         (rendered_w / layer_w * 100.0) as u32,
-        rendered_w as u32, rendered_h as u32);
+        rendered_w as u32,
+        rendered_h as u32
+    );
     draw_text_with_bg(canvas, label_x, label_y, &line1, color, bg, 2);
 
-    let line2 = format!("POS {}:{}  ROT {}d",
-        cx_offset as i32, cy_offset as i32,
-        rotation as i32);
-    draw_text_with_bg(canvas, label_x + 2, label_y + 5 * 2 + 2, &line2, color, bg, 2);
+    let line2 = format!(
+        "POS {}:{}  ROT {}d",
+        cx_offset as i32, cy_offset as i32, rotation as i32
+    );
+    draw_text_with_bg(
+        canvas,
+        label_x + 2,
+        label_y + 5 * 2 + 2,
+        &line2,
+        color,
+        bg,
+        2,
+    );
 }

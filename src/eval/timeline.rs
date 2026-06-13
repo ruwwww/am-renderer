@@ -4,7 +4,7 @@
 //! [`ResolvedScene`] containing all visible layers with their animated
 //! properties evaluated to concrete values.
 
-use crate::model::{Project, Layer, ResolvedLayer};
+use crate::model::{Layer, Project, ResolvedLayer};
 
 /// A fully resolved scene at a specific point in time.
 ///
@@ -68,11 +68,13 @@ pub fn evaluate(project: &Project, time_secs: f32) -> ResolvedScene {
     }
 }
 
-fn integrate_spin_numeric(rpm_animated: &crate::model::Animated<f32>, t: f32, duration_secs: f32) -> f32 {
+fn integrate_spin_numeric(
+    rpm_animated: &crate::model::Animated<f32>,
+    t: f32,
+    duration_secs: f32,
+) -> f32 {
     match rpm_animated {
-        crate::model::Animated::Static(rpm) => {
-            rpm * t * duration_secs * 6.0
-        }
+        crate::model::Animated::Static(rpm) => rpm * t * duration_secs * 6.0,
         crate::model::Animated::Keyframed(_) => {
             let n = 100;
             let step = t / n as f32;
@@ -101,7 +103,11 @@ fn resolve_layer(layer: &Layer, t: f32, time_secs: f32) -> ResolvedLayer {
         if let crate::model::EffectType::Fade(ref params) = effect.effect_type {
             let duration_ms = layer.end_time - layer.start_time;
             opacity = crate::render::effects::fade::apply_fade(
-                opacity, t, duration_ms, params.in_time, params.out_time,
+                opacity,
+                t,
+                duration_ms,
+                params.in_time,
+                params.out_time,
             );
         }
     }

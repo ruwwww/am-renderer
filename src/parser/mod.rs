@@ -2,11 +2,10 @@
 //!
 //! Re-exports the raw XML deserialization types and the [`parse_xml`] function.
 
+pub mod converter;
 pub mod types;
 pub mod xml;
-pub mod converter;
 
+pub use converter::{build_virtual_mappings, convert_project};
 pub use types::*;
 pub use xml::parse_xml;
-pub use converter::{convert_project, build_virtual_mappings};
-

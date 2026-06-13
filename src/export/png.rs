@@ -2,19 +2,24 @@
 
 use anyhow::{Context, Result};
 use image::RgbaImage;
-use std::path::Path;
 use rayon::prelude::*;
+use std::path::Path;
 
-use crate::model::Project;
 use crate::eval::timeline::evaluate;
+use crate::model::Project;
 use crate::render::compositor::{render_scene, ImageCache};
 
 /// Export a single frame image as a PNG file.
 pub fn export_frame(image: &RgbaImage, output_dir: &Path, frame_number: u32) -> Result<()> {
-    std::fs::create_dir_all(output_dir)
-        .with_context(|| format!("failed to create output directory: {}", output_dir.display()))?;
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
     let path = output_dir.join(format!("frame_{:06}.png", frame_number));
-    image.save(&path)
+    image
+        .save(&path)
         .with_context(|| format!("failed to save frame to: {}", path.display()))?;
     Ok(())
 }
@@ -52,8 +57,12 @@ pub fn export_sequence(
         }
     }
 
-    std::fs::create_dir_all(output_dir)
-        .with_context(|| format!("failed to create output directory: {}", output_dir.display()))?;
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
 
     let de = disabled_effects.to_vec();
     // Render frames in parallel

@@ -1,6 +1,6 @@
+use super::utils::to_rgba_u8;
 use crate::model::{Gradient, GradientStop};
 use image::RgbaImage;
-use super::utils::to_rgba_u8;
 
 /// Render a gradient into an image buffer.
 pub(crate) fn render_gradient(w: u32, h: u32, gradient: &Gradient) -> RgbaImage {

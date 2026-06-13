@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use image::RgbaImage;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -46,7 +46,12 @@ impl ImageCache {
         if !self.images.contains_key(uri) {
             let img = if let Some(physical_path) = self.virtual_mappings.get(uri) {
                 image::open(physical_path)
-                    .with_context(|| format!("Failed to open virtually paired image: {}", physical_path.display()))?
+                    .with_context(|| {
+                        format!(
+                            "Failed to open virtually paired image: {}",
+                            physical_path.display()
+                        )
+                    })?
                     .to_rgba8()
             } else {
                 load_image_from_uri(uri, assets_dir)?
@@ -82,10 +87,7 @@ fn load_image_from_uri(uri: &str, assets_dir: &Path) -> Result<RgbaImage> {
     // Strategy 2: Try without the extension or with different case
     if let Ok(entries) = std::fs::read_dir(assets_dir) {
         let filename_lower = filename.to_lowercase();
-        let stem = filename_lower
-            .rsplit('.')
-            .last()
-            .unwrap_or(&filename_lower);
+        let stem = filename_lower.rsplit('.').last().unwrap_or(&filename_lower);
 
         for entry in entries.flatten() {
             let entry_name = entry.file_name().to_string_lossy().to_string();
@@ -95,19 +97,16 @@ fn load_image_from_uri(uri: &str, assets_dir: &Path) -> Result<RgbaImage> {
             // Case-insensitive exact match (including extension if present in URI)
             if entry_lower == filename_lower {
                 let img = image::open(&entry_path)
-                    .with_context(|| {
-                        format!("Failed to open image: {}", entry_path.display())
-                    })?;
+                    .with_context(|| format!("Failed to open image: {}", entry_path.display()))?;
                 return Ok(img.to_rgba8());
             }
 
             // Case-insensitive exact stem match (e.g. "1000174558.jpg" matches "1000174558")
             if let Some(entry_stem) = entry_path.file_stem().and_then(|s| s.to_str()) {
                 if entry_stem.to_lowercase() == filename_lower {
-                    let img = image::open(&entry_path)
-                        .with_context(|| {
-                            format!("Failed to open image: {}", entry_path.display())
-                        })?;
+                    let img = image::open(&entry_path).with_context(|| {
+                        format!("Failed to open image: {}", entry_path.display())
+                    })?;
                     return Ok(img.to_rgba8());
                 }
             }
@@ -116,10 +115,9 @@ fn load_image_from_uri(uri: &str, assets_dir: &Path) -> Result<RgbaImage> {
             if stem.len() >= 8 {
                 let prefix = &stem[..8];
                 if entry_lower.starts_with(prefix) {
-                    let img = image::open(&entry_path)
-                        .with_context(|| {
-                            format!("Failed to open image: {}", entry_path.display())
-                        })?;
+                    let img = image::open(&entry_path).with_context(|| {
+                        format!("Failed to open image: {}", entry_path.display())
+                    })?;
                     return Ok(img.to_rgba8());
                 }
             }

@@ -113,9 +113,7 @@ impl<T: Clone + Lerp> Animated<T> {
 fn apply_easing(t: f32, easing: &EasingType) -> f32 {
     match easing {
         EasingType::Linear => t,
-        EasingType::CubicBezier(x1, y1, x2, y2) => {
-            cubic_bezier_sample(t, *x1, *y1, *x2, *y2)
-        }
+        EasingType::CubicBezier(x1, y1, x2, y2) => cubic_bezier_sample(t, *x1, *y1, *x2, *y2),
     }
 }
 
@@ -146,7 +144,5 @@ fn bezier_component(t: f32, p1: f32, p2: f32) -> f32 {
 
 fn bezier_component_deriv(t: f32, p1: f32, p2: f32) -> f32 {
     let t2 = t * t;
-    3.0 * (1.0 - t) * (1.0 - t) * p1
-        + 6.0 * (1.0 - t) * t * (p2 - p1)
-        + 3.0 * t2 * (1.0 - p2)
+    3.0 * (1.0 - t) * (1.0 - t) * p1 + 6.0 * (1.0 - t) * t * (p2 - p1) + 3.0 * t2 * (1.0 - p2)
 }

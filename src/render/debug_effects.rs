@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
 use anyhow::Result;
-use image::{RgbaImage, Rgba};
+use image::{Rgba, RgbaImage};
 use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 
 use crate::eval::timeline::ResolvedScene;
-use crate::render::compositor::{render_scene, ImageCache};
 use crate::model::Effect;
+use crate::render::compositor::{render_scene, ImageCache};
 
 const DEBUG_SUBDIR: &str = "debug_effects";
 const TILE_GAP: u32 = 4;
@@ -89,8 +89,14 @@ pub fn render_effects_debug(
             .par_iter()
             .map(|task| {
                 let mut cc = task.cache.clone();
-                let img = render_scene(&task.scene, &mut cc, &task.assets_dir, false, &task.disabled_effects)
-                    .unwrap_or_else(|_| RgbaImage::new(1, 1));
+                let img = render_scene(
+                    &task.scene,
+                    &mut cc,
+                    &task.assets_dir,
+                    false,
+                    &task.disabled_effects,
+                )
+                .unwrap_or_else(|_| RgbaImage::new(1, 1));
                 (task.name.clone(), img)
             })
             .collect();
@@ -103,7 +109,12 @@ pub fn render_effects_debug(
         // 4. Cumulative chain tiled image
         if !layer.effects.is_empty() {
             let cumulative_img = build_cumulative_tile(
-                &base_scene, layer_idx, &layer.effects, image_cache, assets_dir, disabled_effects,
+                &base_scene,
+                layer_idx,
+                &layer.effects,
+                image_cache,
+                assets_dir,
+                disabled_effects,
             )?;
             let path = debug_dir.join(format!("layer{}_chain_cumulative.png", layer_idx));
             cumulative_img.save(&path)?;
@@ -165,7 +176,9 @@ fn build_cumulative_tile(
     let tile_w = top_steps[0].width();
     let tile_h = top_steps[0].height();
 
-    let total_w = tile_w.saturating_mul(n as u32).saturating_add(TILE_GAP.saturating_mul((n as u32).saturating_sub(1)));
+    let total_w = tile_w
+        .saturating_mul(n as u32)
+        .saturating_add(TILE_GAP.saturating_mul((n as u32).saturating_sub(1)));
     let total_h = (tile_h + LABEL_H) * 2 + TILE_GAP * 3;
 
     let mut canvas = RgbaImage::new(total_w, total_h);
@@ -185,7 +198,13 @@ fn build_cumulative_tile(
     let top_img_y = top_label_y + LABEL_H;
     for (i, img) in top_steps.iter().enumerate() {
         let x = i as u32 * (tile_w + TILE_GAP);
-        draw_label(&mut canvas, x, top_label_y, &format!("Top{}", i + 1), Rgba([200, 200, 200, 255]));
+        draw_label(
+            &mut canvas,
+            x,
+            top_label_y,
+            &format!("Top{}", i + 1),
+            Rgba([200, 200, 200, 255]),
+        );
         for dy in 0..tile_h {
             for dx in 0..tile_w {
                 canvas.put_pixel(x + dx, top_img_y + dy, *img.get_pixel(dx, dy));
@@ -197,7 +216,13 @@ fn build_cumulative_tile(
     let bot_img_y = bot_label_y + LABEL_H;
     for (i, img) in bot_steps.iter().enumerate() {
         let x = i as u32 * (tile_w + TILE_GAP);
-        draw_label(&mut canvas, x, bot_label_y, &format!("Bot{}", i + 1), Rgba([200, 200, 200, 255]));
+        draw_label(
+            &mut canvas,
+            x,
+            bot_label_y,
+            &format!("Bot{}", i + 1),
+            Rgba([200, 200, 200, 255]),
+        );
         for dy in 0..tile_h {
             for dx in 0..tile_w {
                 canvas.put_pixel(x + dx, bot_img_y + dy, *img.get_pixel(dx, dy));
@@ -212,6 +237,12 @@ fn effect_type_short_name(et: &crate::model::EffectType) -> String {
     let s = format!("{:?}", et);
     let base = s.split('(').next().unwrap_or("unknown");
     base.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }

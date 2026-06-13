@@ -4,14 +4,16 @@
 //! the renderer pipeline: project definitions, layers, animations,
 //! effects, and resolved (evaluated) layer states.
 
-pub mod project;
-pub mod layer;
 pub mod animation;
-pub mod keyframe;
 pub mod effect;
+pub mod keyframe;
+pub mod layer;
+pub mod project;
 
 // Re-export commonly used types for convenience
-pub use project::{Project, MediaRef, AudioTrack};
-pub use layer::{Layer, ResolvedLayer, LayerTransform, BlendMode, FillType, Gradient, GradientStop};
-pub use animation::{Animated, Keyframe, EasingType, Lerp};
+pub use animation::{Animated, EasingType, Keyframe, Lerp};
 pub use effect::{Effect, EffectType};
+pub use layer::{
+    BlendMode, FillType, Gradient, GradientStop, Layer, LayerTransform, ResolvedLayer,
+};
+pub use project::{AudioTrack, MediaRef, Project};

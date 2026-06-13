@@ -1,4 +1,4 @@
-use image::{RgbaImage, Rgba};
+use image::{Rgba, RgbaImage};
 
 pub fn apply_color_fill(img: RgbaImage, color: [f32; 4], opacity: f32) -> RgbaImage {
     let mut img = img;

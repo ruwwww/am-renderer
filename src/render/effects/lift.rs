@@ -1,5 +1,5 @@
-use image::RgbaImage;
 use anyhow::Result;
+use image::RgbaImage;
 
 use crate::eval::transform::transform_point;
 
@@ -48,7 +48,12 @@ pub fn apply_lift(
 
             let bg_pixel = if cx >= 0 && cx < cw && cy >= 0 && cy < ch {
                 let off = cy as usize * canvas_stride + cx as usize * 4;
-                [canvas_raw[off], canvas_raw[off+1], canvas_raw[off+2], canvas_raw[off+3]]
+                [
+                    canvas_raw[off],
+                    canvas_raw[off + 1],
+                    canvas_raw[off + 2],
+                    canvas_raw[off + 3],
+                ]
             } else {
                 [0u8; 4]
             };
@@ -66,7 +71,7 @@ pub fn apply_lift(
                 bg_pixel
             };
 
-            bg_raw[dst_off]     = final_px[0];
+            bg_raw[dst_off] = final_px[0];
             bg_raw[dst_off + 1] = final_px[1];
             bg_raw[dst_off + 2] = final_px[2];
             bg_raw[dst_off + 3] = final_px[3];

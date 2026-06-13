@@ -1,12 +1,12 @@
 use anyhow::Result;
-use image::{RgbaImage, Rgba};
+use image::{Rgba, RgbaImage};
 use log::warn;
 use std::path::Path;
 
-use crate::model::{FillType, ResolvedLayer};
 use super::cache::ImageCache;
 use super::gradient::render_gradient;
 use super::utils::to_rgba_u8;
+use crate::model::{FillType, ResolvedLayer};
 
 /// Create the base shape image source without any lift (background copy) effect.
 pub(crate) fn create_base_shape_source(
@@ -22,7 +22,10 @@ pub(crate) fn create_base_shape_source(
                 let source = image_cache.load(uri, assets_dir)?;
                 (*source).clone()
             } else {
-                warn!("Media layer '{}' has no fill image URI", layer.label.as_deref().unwrap_or("unnamed"));
+                warn!(
+                    "Media layer '{}' has no fill image URI",
+                    layer.label.as_deref().unwrap_or("unnamed")
+                );
                 RgbaImage::new(w, h)
             }
         }
@@ -46,9 +49,7 @@ pub(crate) fn create_base_shape_source(
                 img
             }
         }
-        FillType::None => {
-            RgbaImage::new(w, h)
-        }
+        FillType::None => RgbaImage::new(w, h),
     };
 
     if layer.s.as_deref() == Some(".circle") {

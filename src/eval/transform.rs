@@ -43,9 +43,9 @@ pub fn build_transform_matrix(
     // | sx*sin   sy*cos  ty |
     // |   0        0      1 |
     [
-        [sx * cos_a, sx * sin_a, 0.0],   // column 0
-        [-sy * sin_a, sy * cos_a, 0.0],  // column 1
-        [tx, ty, 1.0],                    // column 2
+        [sx * cos_a, sx * sin_a, 0.0],  // column 0
+        [-sy * sin_a, sy * cos_a, 0.0], // column 1
+        [tx, ty, 1.0],                  // column 2
     ]
 }
 
@@ -76,13 +76,13 @@ pub fn invert_transform(m: &[[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
     let inv_det = 1.0 / det;
 
     Some([
-        [d * inv_det, -c * inv_det, 0.0],        // column 0
-        [-b * inv_det, a * inv_det, 0.0],         // column 1
+        [d * inv_det, -c * inv_det, 0.0], // column 0
+        [-b * inv_det, a * inv_det, 0.0], // column 1
         [
             (b * ty - d * tx) * inv_det,
             (c * tx - a * ty) * inv_det,
             1.0,
-        ],                                         // column 2
+        ], // column 2
     ])
 }
 

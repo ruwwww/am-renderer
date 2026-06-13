@@ -1,4 +1,4 @@
-use crate::model::{EffectType, Effect};
+use crate::model::{Effect, EffectType};
 
 pub fn apply_transform_effects(
     effects: &[Effect],
@@ -14,7 +14,10 @@ pub fn apply_transform_effects(
     let mut rot = rotation;
 
     for effect in effects {
-        if disabled_effects.iter().any(|d| d == effect.effect_type.type_name()) {
+        if disabled_effects
+            .iter()
+            .any(|d| d == effect.effect_type.type_name())
+        {
             continue;
         }
         match &effect.effect_type {
@@ -64,8 +67,8 @@ fn simple_noise(seed: f32, evolution: f32, offset: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Animated;
     use crate::model::effect::OscillateParams;
+    use crate::model::Animated;
 
     #[test]
     fn test_oscillate_effect_over_time() {
@@ -87,9 +90,12 @@ mod tests {
 
         let disabled = &[];
 
-        let (loc0, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.0, 0.0, disabled);
-        let (loc_quarter, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.25, 0.25, disabled);
-        let (loc_half, _, _) = apply_transform_effects(&effects, location, scale, rotation, 0.5, 0.5, disabled);
+        let (loc0, _, _) =
+            apply_transform_effects(&effects, location, scale, rotation, 0.0, 0.0, disabled);
+        let (loc_quarter, _, _) =
+            apply_transform_effects(&effects, location, scale, rotation, 0.25, 0.25, disabled);
+        let (loc_half, _, _) =
+            apply_transform_effects(&effects, location, scale, rotation, 0.5, 0.5, disabled);
 
         assert_eq!(loc0[0], 0.0);
         assert!((loc_quarter[0] - 100.0).abs() < 1e-4);
