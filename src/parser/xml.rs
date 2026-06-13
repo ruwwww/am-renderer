@@ -154,6 +154,8 @@ mod tests {
         assert_eq!(audio.start_time, "0");
         assert_eq!(audio.end_time, "5432");
         assert_eq!(audio.src.as_deref(), Some("am-internal:///abc.mp3"));
+        assert_eq!(audio.in_time.as_deref(), Some("18366"));
+        assert_eq!(audio.out_time, None);
         let gain = audio.gain.as_ref().expect("gain missing");
         assert_eq!(gain.keyframes.len(), 2);
         assert_eq!(

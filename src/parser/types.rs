@@ -222,9 +222,13 @@ pub struct XmlAudio {
     #[serde(rename = "@src", default)]
     pub src: Option<String>,
 
-    /// In-point within the source media (microseconds).
+    /// In-point within the source media (milliseconds).
     #[serde(rename = "@inTime", default)]
     pub in_time: Option<String>,
+
+    /// Out-point within the source media (milliseconds).
+    #[serde(rename = "@outTime", default)]
+    pub out_time: Option<String>,
 
     /// Gain envelope.
     #[serde(default)]

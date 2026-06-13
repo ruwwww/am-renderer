@@ -59,6 +59,10 @@ pub struct AudioTrack {
     pub end_time: f32,
     /// Source media URI.
     pub src: Option<String>,
+    /// In-point trim offset within the source media in milliseconds.
+    pub in_time: f32,
+    /// Out-point trim offset within the source media in milliseconds.
+    pub out_time: Option<f32>,
 }
 
 impl Project {

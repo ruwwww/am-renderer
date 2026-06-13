@@ -215,6 +215,12 @@ fn convert_audio(xml: &XmlAudio) -> AudioTrack {
         start_time: xml.start_time.parse().unwrap_or(0.0),
         end_time: xml.end_time.parse().unwrap_or(0.0),
         src: xml.src.clone(),
+        in_time: xml
+            .in_time
+            .as_deref()
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(0.0),
+        out_time: xml.out_time.as_deref().and_then(|t| t.parse().ok()),
     }
 }
 
@@ -597,7 +603,7 @@ pub fn build_virtual_mappings(
 ) -> Result<HashMap<String, PathBuf>> {
     let mut mappings = HashMap::new();
 
-    // 1. Gather all unique image URIs required
+    // 1. Gather all unique image and audio URIs required
     let mut required_image_uris = HashSet::new();
     for layer in &project.layers {
         if layer.fill_type == FillType::Media {
@@ -620,12 +626,17 @@ pub fn build_virtual_mappings(
         }
     }
 
-    if required_image_uris.is_empty() {
-        return Ok(mappings);
+    let mut required_audio_uris = HashSet::new();
+    for track in &project.audio_tracks {
+        if let Some(ref uri) = track.src {
+            required_audio_uris.insert(uri.clone());
+        }
     }
 
-    // 2. Scan assets directory for available physical image files
+    // 2. Scan assets directory for available physical files
     let mut available_images = Vec::new();
+    let mut available_audio = Vec::new();
+
     if assets_dir.exists() {
         for entry in std::fs::read_dir(assets_dir)?.flatten() {
             let path = entry.path();
@@ -637,29 +648,49 @@ pub fn build_virtual_mappings(
                         "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif"
                     ) {
                         available_images.push(path);
+                    } else if matches!(
+                        ext_lower.as_str(),
+                        "mp3" | "wav" | "m4a" | "ogg" | "aac" | "flac" | "mp4"
+                    ) {
+                        available_audio.push(path);
                     }
                 }
             }
         }
     }
 
-    if available_images.is_empty() {
-        anyhow::bail!(
-            "No source images found in assets directory '{}' to perform auto-pairing.",
-            assets_dir.display()
-        );
+    // 3. Pair images
+    if !required_image_uris.is_empty() {
+        if available_images.is_empty() {
+            anyhow::bail!(
+                "No source images found in assets directory '{}' to perform auto-pairing.",
+                assets_dir.display()
+            );
+        }
+        available_images.sort();
+        let mut sorted_uris: Vec<String> = required_image_uris.into_iter().collect();
+        sorted_uris.sort();
+        for (idx, uri) in sorted_uris.into_iter().enumerate() {
+            let physical_path = &available_images[idx % available_images.len()];
+            mappings.insert(uri, physical_path.clone());
+        }
     }
 
-    // Sort physical images to make the mapping deterministic
-    available_images.sort();
-
-    // 3. Pair them using round-robin mapping
-    let mut sorted_uris: Vec<String> = required_image_uris.into_iter().collect();
-    sorted_uris.sort();
-
-    for (idx, uri) in sorted_uris.into_iter().enumerate() {
-        let physical_path = &available_images[idx % available_images.len()];
-        mappings.insert(uri, physical_path.clone());
+    // 4. Pair audio
+    if !required_audio_uris.is_empty() {
+        if available_audio.is_empty() {
+            anyhow::bail!(
+                "No source audio files found in assets directory '{}' to perform auto-pairing.",
+                assets_dir.display()
+            );
+        }
+        available_audio.sort();
+        let mut sorted_audio_uris: Vec<String> = required_audio_uris.into_iter().collect();
+        sorted_audio_uris.sort();
+        for (idx, uri) in sorted_audio_uris.into_iter().enumerate() {
+            let physical_path = &available_audio[idx % available_audio.len()];
+            mappings.insert(uri, physical_path.clone());
+        }
     }
 
     Ok(mappings)

@@ -104,9 +104,15 @@ fn main() -> Result<()> {
         Commands::Info { input } => {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
-            println!("Project: {}", project.title.as_deref().unwrap_or("Untitled"));
+            println!(
+                "Project: {}",
+                project.title.as_deref().unwrap_or("Untitled")
+            );
             println!("Canvas Size: {}x{}", project.width, project.height);
-            println!("Export Size: {}x{}", project.export_width, project.export_height);
+            println!(
+                "Export Size: {}x{}",
+                project.export_width, project.export_height
+            );
             println!("Duration: {:.2}s", project.duration_secs());
             println!("FPS: {}", project.fps);
             println!("Total Frames: {}", project.total_frames());
@@ -151,19 +157,28 @@ fn main() -> Result<()> {
             let xml_scene = am_renderer::parser::parse_xml(&input)?;
             let project = convert_project(&xml_scene)?;
 
-            if frame.is_some() && (start_frame.is_some() || end_frame.is_some() || start_time.is_some() || end_time.is_some()) {
+            if frame.is_some()
+                && (start_frame.is_some()
+                    || end_frame.is_some()
+                    || start_time.is_some()
+                    || end_time.is_some())
+            {
                 anyhow::bail!("Cannot specify range options (--start-frame, --end-frame, --start-time, --end-time) when rendering a single frame (--frame)");
             }
 
             let final_start_frame = match (start_frame, start_time) {
-                (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --start-frame and --start-time"),
+                (Some(_), Some(_)) => {
+                    anyhow::bail!("Cannot specify both --start-frame and --start-time")
+                }
                 (Some(sf), None) => Some(sf),
                 (None, Some(st)) => Some((st * project.fps).round() as u32),
                 (None, None) => None,
             };
 
             let final_end_frame = match (end_frame, end_time) {
-                (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --end-frame and --end-time"),
+                (Some(_), Some(_)) => {
+                    anyhow::bail!("Cannot specify both --end-frame and --end-time")
+                }
                 (Some(ef), None) => Some(ef),
                 (None, Some(et)) => Some((et * project.fps).round() as u32),
                 (None, None) => None,
@@ -193,10 +208,21 @@ fn main() -> Result<()> {
             let mut cache = am_renderer::render::compositor::ImageCache::new();
             if auto_pair {
                 let mappings = build_virtual_mappings(&project, &assets)?;
-                println!("Auto-pairing virtually ({} mapping(s) created):", mappings.len());
+                println!(
+                    "Auto-pairing virtually ({} mapping(s) created):",
+                    mappings.len()
+                );
                 for (uri, path) in &mappings {
-                    let filename = uri.rsplit("///").next().unwrap_or(uri).trim_start_matches('/');
-                    println!("  {} -> {}", filename, path.file_name().unwrap_or_default().to_string_lossy());
+                    let filename = uri
+                        .rsplit("///")
+                        .next()
+                        .unwrap_or(uri)
+                        .trim_start_matches('/');
+                    println!(
+                        "  {} -> {}",
+                        filename,
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    );
                 }
                 cache.set_virtual_mappings(mappings);
             }
@@ -207,7 +233,13 @@ fn main() -> Result<()> {
                 if dump_graph {
                     print_render_graph(&resolved, f, time_secs);
                 }
-                let img = am_renderer::render::compositor::render_scene(&resolved, &mut cache, &assets, debug_layout, disabled)?;
+                let img = am_renderer::render::compositor::render_scene(
+                    &resolved,
+                    &mut cache,
+                    &assets,
+                    debug_layout,
+                    disabled,
+                )?;
 
                 let out_dir = if fmt == Format::Png {
                     output
@@ -217,7 +249,11 @@ fn main() -> Result<()> {
 
                 if debug_effects {
                     render_effects_debug(&resolved, &mut cache, &assets, f, &out_dir, disabled)?;
-                    println!("Debug effects images saved to {}/debug_effects_frame{:06}", out_dir.display(), f);
+                    println!(
+                        "Debug effects images saved to {}/debug_effects_frame{:06}",
+                        out_dir.display(),
+                        f
+                    );
                 }
 
                 am_renderer::export::png::export_frame(&img, &out_dir, f)?;
@@ -230,7 +266,17 @@ fn main() -> Result<()> {
                 }
                 match fmt {
                     Format::Png => {
-                        am_renderer::export::png::export_sequence(&project, &assets, &output, final_start_frame, final_end_frame, false, &mut cache, debug_layout, disabled)?;
+                        am_renderer::export::png::export_sequence(
+                            &project,
+                            &assets,
+                            &output,
+                            final_start_frame,
+                            final_end_frame,
+                            false,
+                            &mut cache,
+                            debug_layout,
+                            disabled,
+                        )?;
                         println!("Successfully rendered sequence to {}", output.display());
                     }
                     Format::Mp4 => {
@@ -242,16 +288,37 @@ fn main() -> Result<()> {
                         std::fs::create_dir_all(&temp_dir)?;
 
                         println!("Rendering frames...");
-                        am_renderer::export::png::export_sequence(&project, &assets, &temp_dir, final_start_frame, final_end_frame, true, &mut cache, debug_layout, disabled)?;
+                        am_renderer::export::png::export_sequence(
+                            &project,
+                            &assets,
+                            &temp_dir,
+                            final_start_frame,
+                            final_end_frame,
+                            true,
+                            &mut cache,
+                            debug_layout,
+                            disabled,
+                        )?;
 
-                        let video_w = if debug_layout { project.width * 2 } else { project.width };
-                        let video_h = if debug_layout { project.height * 2 } else { project.height };
+                        let video_w = if debug_layout {
+                            project.width * 2
+                        } else {
+                            project.width
+                        };
+                        let video_h = if debug_layout {
+                            project.height * 2
+                        } else {
+                            project.height
+                        };
                         am_renderer::export::video::export_mp4(
                             &temp_dir,
                             &output,
                             project.fps as u32,
                             video_w,
                             video_h,
+                            &project.audio_tracks,
+                            &assets,
+                            &cache.virtual_mappings,
                         )?;
 
                         // Cleanup temp frames
@@ -291,21 +358,22 @@ fn print_distinct_media_inputs(project: &Project) {
         return;
     }
 
-    println!("Distinct Media Inputs Required ({}):", referenced_uris.len());
+    println!(
+        "Distinct Media Inputs Required ({}):",
+        referenced_uris.len()
+    );
     let mut sorted_uris: Vec<String> = referenced_uris.into_iter().collect();
     sorted_uris.sort();
 
     for uri in sorted_uris {
         let metadata = project.media.iter().find(|m| m.uri == uri);
-        let label = metadata.and_then(|m| m.title.as_deref())
+        let label = metadata
+            .and_then(|m| m.title.as_deref())
             .or_else(|| metadata.and_then(|m| m.filename.as_deref()))
-            .unwrap_or_else(|| {
-                uri.rsplit('/')
-                    .next()
-                    .unwrap_or(&uri)
-            });
+            .unwrap_or_else(|| uri.rsplit('/').next().unwrap_or(&uri));
 
-        let mime = metadata.and_then(|m| m.mime_type.as_deref())
+        let mime = metadata
+            .and_then(|m| m.mime_type.as_deref())
             .unwrap_or_else(|| {
                 if uri.to_lowercase().ends_with(".mp3") || uri.to_lowercase().ends_with(".wav") {
                     "audio/unknown"
@@ -314,7 +382,10 @@ fn print_distinct_media_inputs(project: &Project) {
                 }
             });
 
-        let dim_str = if let (Some(w), Some(h)) = (metadata.and_then(|m| m.width), metadata.and_then(|m| m.height)) {
+        let dim_str = if let (Some(w), Some(h)) = (
+            metadata.and_then(|m| m.width),
+            metadata.and_then(|m| m.height),
+        ) {
             format!(" [{}x{}]", w, h)
         } else {
             "".to_string()
@@ -325,7 +396,10 @@ fn print_distinct_media_inputs(project: &Project) {
 }
 
 fn print_render_graph(scene: &am_renderer::eval::ResolvedScene, frame_num: u32, time_secs: f32) {
-    println!("=== Render Graph for Frame {} (at {:.3}s) ===", frame_num, time_secs);
+    println!(
+        "=== Render Graph for Frame {} (at {:.3}s) ===",
+        frame_num, time_secs
+    );
     println!("Canvas size: {}x{}", scene.width, scene.height);
     println!("Background color: {:?}", scene.bg_color);
     println!("Layers (bottom-to-top):");
@@ -353,14 +427,10 @@ fn print_render_graph(scene: &am_renderer::eval::ResolvedScene, frame_num: u32, 
             for (e_idx, effect) in layer.effects.iter().enumerate() {
                 println!(
                     "        - ({}.{}) {:?} (locally applied: {})",
-                    idx,
-                    e_idx,
-                    effect.effect_type,
-                    effect.locally_applied
+                    idx, e_idx, effect.effect_type, effect.locally_applied
                 );
             }
         }
     }
     println!("=============================================");
 }
-
