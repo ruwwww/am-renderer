@@ -134,11 +134,15 @@ pub fn apply_pixel_effects(
                 }
             }
             EffectType::Tile(params) => {
-                let scale = params.scale.evaluate(layer.normalized_t);
-                let phase = params.phase.evaluate(layer.normalized_t);
-                let angle = params.angle.evaluate(layer.normalized_t);
-                if (scale - 1.0).abs() > 0.01 || angle.abs() > 0.001 {
-                    tile::apply_tile(img, scale, phase, params.vert_offset, params.mirror, angle)
+                if effect.locally_applied {
+                    let scale = params.scale.evaluate(layer.normalized_t);
+                    let phase = params.phase.evaluate(layer.normalized_t);
+                    let angle = params.angle.evaluate(layer.normalized_t);
+                    if (scale - 1.0).abs() > 0.01 || angle.abs() > 0.001 || phase.abs() > 0.001 || params.mirror {
+                        tile::apply_tile(img, scale, phase, params.vert_offset, params.mirror, angle)
+                    } else {
+                        img
+                    }
                 } else {
                     img
                 }
