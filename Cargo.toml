@@ -32,6 +32,7 @@ members = [
     "packages/alight-parser",
     "packages/renderer-core",
     "packages/export-service",
+    "packages/preview-service",
 ]
 
 [profile.release]

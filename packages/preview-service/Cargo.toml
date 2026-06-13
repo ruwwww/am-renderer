@@ -1,0 +1,29 @@
+[package]
+name = "preview-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web/WebSockets
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Image & Compression
+image = "0.25"
+webp = "0.3"
+
+# Core workspace crates
+graph-resolver = { path = "../graph-resolver" }
+alight-parser = { path = "../alight-parser" }
+renderer-core = { path = "../renderer-core" }
+
+# Utilities
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
