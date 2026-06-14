@@ -43,19 +43,32 @@ cargo run --release -- render -i presets/preset1.xml -a assets -o output.mp4
 
 ### Running the Web Editor
 
-1. **Start the Backend Preview Server**:
-   ```bash
-   cargo run --release -p preview-service
-   ```
-   This initializes `db.sqlite` and starts the API server on `http://localhost:8080/`.
+**One command** — starts both the Rust backend and React frontend together:
 
-2. **Run the React Frontend (Vite Dev Mode)**:
-   ```bash
-   cd packages/web-editor
-   npm install
-   npm run dev
-   ```
-   This opens the frontend editor on `http://localhost:5173/`.
+```bash
+# First-time setup (installs concurrently + frontend deps)
+npm install
+npm run setup
+
+# Launch everything (debug build, fastest startup)
+npm run dev
+
+# Or with full release optimisations
+npm run dev:release
+```
+
+On **Windows**, a one-click PowerShell script is also available:
+```powershell
+.\start.ps1           # debug build
+.\start.ps1 -Release  # release build
+```
+
+Both approaches automatically:
+- ✅ Install frontend `node_modules` if missing
+- ✅ Start `preview-service` on `http://localhost:8080`
+- ✅ Start Vite dev server on `http://localhost:3000`
+- ✅ Print colour-coded output from each process
+- ✅ Stop both processes cleanly on `Ctrl+C`
 
 ### Running Tests
 

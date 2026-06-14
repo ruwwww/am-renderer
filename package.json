@@ -1,0 +1,16 @@
+{
+  "name": "am-renderer-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dev launcher for am-renderer preview-service backend + web-editor frontend",
+  "scripts": {
+    "setup": "npm --prefix packages/web-editor install",
+    "dev": "concurrently --kill-others-on-fail --names \"backend,frontend\" --prefix-colors \"blue.bold,green.bold\" \"cargo run -p preview-service\" \"npm --prefix packages/web-editor run dev\"",
+    "dev:release": "concurrently --kill-others-on-fail --names \"backend,frontend\" --prefix-colors \"blue.bold,green.bold\" \"cargo run --release -p preview-service\" \"npm --prefix packages/web-editor run dev\"",
+    "build": "cargo build --release && npm --prefix packages/web-editor run build",
+    "test": "cargo test --workspace --exclude integration-tests"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

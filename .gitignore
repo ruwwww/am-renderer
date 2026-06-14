@@ -3,3 +3,5 @@
 /.temp_frames
 .agents
 *.sqlite
+/node_modules
+/package-lock.json
