@@ -1,9 +1,10 @@
 //! Project-level model types.
 
+use serde::{Serialize, Deserialize};
 use super::layer::Layer;
 
 /// Top-level project model parsed from an Alight Motion XML file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     /// Project title.
     pub title: Option<String>,
@@ -30,7 +31,7 @@ pub struct Project {
 }
 
 /// A reference to an imported media asset.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaRef {
     /// URI of the asset (e.g. `"am-internal:///HASH.PNG"`).
     pub uri: String,
@@ -47,7 +48,7 @@ pub struct MediaRef {
 }
 
 /// An audio track in the project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioTrack {
     /// Unique id.
     pub id: u64,

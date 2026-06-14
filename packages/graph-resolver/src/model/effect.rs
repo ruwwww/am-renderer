@@ -11,7 +11,7 @@ use super::animation::Animated;
 /// Each variant wraps a parameter struct containing the effect's animatable
 /// and static properties. Unknown effects preserve their raw ID string for
 /// diagnostic purposes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum EffectType {
     // -- Transform modifiers --
     /// Periodic oscillation of position/scale/rotation.
@@ -118,7 +118,7 @@ impl EffectType {
 }
 
 /// A fully resolved effect attached to a layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Effect {
     /// The effect variant and its parameters.
     pub effect_type: EffectType,
@@ -132,7 +132,7 @@ pub struct Effect {
 // ---------------------------------------------------------------------------
 
 /// Parameters for the oscillation effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OscillateParams {
     /// Oscillation angle in degrees.
     pub angle: Animated<f32>,
@@ -162,7 +162,7 @@ impl Default for OscillateParams {
 }
 
 /// Parameters for the swing (pendulum) effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SwingParams {
     /// Primary amplitude in degrees.
     pub a1: Animated<f32>,
@@ -183,7 +183,7 @@ impl Default for SwingParams {
 }
 
 /// Parameters for random displacement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RandomDisplaceParams {
     /// Evolution speed (animated noise offset).
     pub evolution: Animated<f32>,
@@ -207,7 +207,7 @@ impl Default for RandomDisplaceParams {
 }
 
 /// Parameters for simulated motion blur.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MotionBlurParams {
     /// Blur intensity / shutter angle tuning.
     pub tune: Animated<f32>,
@@ -231,7 +231,7 @@ impl Default for MotionBlurParams {
 }
 
 /// Parameters for periodic blinking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BlinkParams {
     /// Blink frequency in Hz.
     pub freq: Animated<f32>,
@@ -246,7 +246,7 @@ impl Default for BlinkParams {
 }
 
 /// Parameters for fade in/out.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FadeParams {
     /// Fade-in duration in milliseconds.
     pub in_time: f32,
@@ -264,7 +264,7 @@ impl Default for FadeParams {
 }
 
 /// Parameters for tiled repetition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TileParams {
     /// Whether tiles are mirrored at boundaries.
     pub mirror: bool,
@@ -291,7 +291,7 @@ impl Default for TileParams {
 }
 
 /// Parameters for exposure adjustment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExposureParams {
     /// Exposure value in stops.
     pub exposure: Animated<f32>,
@@ -312,7 +312,7 @@ impl Default for ExposureParams {
 }
 
 /// Parameters for brightness and contrast adjustment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BrightnessContrastParams {
     /// Brightness offset (-1.0 to 1.0).
     pub brightness: f32,
@@ -330,7 +330,7 @@ impl Default for BrightnessContrastParams {
 }
 
 /// Parameters for saturation and vibrance adjustment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SaturationVibranceParams {
     /// Saturation multiplier (-1.0 to 1.0).
     pub saturation: f32,
@@ -348,7 +348,7 @@ impl Default for SaturationVibranceParams {
 }
 
 /// Parameters for color tint.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ColorTintParams {
     /// RGB tint color (0.0–1.0 per channel).
     pub tint: [f32; 3],
@@ -363,7 +363,7 @@ impl Default for ColorTintParams {
 }
 
 /// Parameters for highlight and shadow adjustment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HighlightShadowParams {
     /// Highlight recovery amount (-1.0 to 1.0).
     pub highlights: f32,
@@ -381,7 +381,7 @@ impl Default for HighlightShadowParams {
 }
 
 /// Parameters for vignette effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VignetteParams {
     /// Feather (softness) of the vignette edge.
     pub feather: f32,
@@ -414,7 +414,7 @@ impl Default for VignetteParams {
 }
 
 /// Parameters for unsharp mask sharpening.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SharpenParams {
     /// Sharpening radius in pixels.
     pub radius: f32,
@@ -432,7 +432,7 @@ impl Default for SharpenParams {
 }
 
 /// Parameters for Gaussian blur.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GaussianBlurParams {
     /// Blur radius in pixels.
     pub radius: f32,
@@ -445,7 +445,7 @@ impl Default for GaussianBlurParams {
 }
 
 /// Parameters for lens (bokeh) blur.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LensBlurParams {
     /// Blur radius in pixels.
     pub radius: f32,
@@ -463,7 +463,7 @@ impl Default for LensBlurParams {
 }
 
 /// Parameters for gradient overlay.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GradientOverlayParams {
     /// Overall alpha of the gradient overlay (0.0–1.0).
     pub alpha: f32,
@@ -490,7 +490,7 @@ impl Default for GradientOverlayParams {
 }
 
 /// Parameters for luminance-based alpha keying.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LumaKeyParams {
     /// Lower luminance threshold (pixels below this become transparent).
     pub low_threshold: Animated<f32>,
@@ -508,7 +508,7 @@ impl Default for LumaKeyParams {
 }
 
 /// Parameters for lift adjustment / copy background.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LiftParams {
     /// Blend amount (0.0 = 100% background, 1.0 = 100% shape color).
     pub fill: f32,
@@ -521,7 +521,7 @@ impl Default for LiftParams {
 }
 
 /// Parameters for offset effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OffsetParams {
     /// Offset vector in pixels [dx, dy].
     pub offset: [f32; 2],
@@ -542,7 +542,7 @@ impl Default for OffsetParams {
 }
 
 /// Parameters for find edges effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FindEdgesParams {
     /// Smoothing amount.
     pub smoothing: f32,
@@ -563,7 +563,7 @@ impl Default for FindEdgesParams {
 }
 
 /// Parameters for stretch segment effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StretchSegmentParams {
     /// Angle of stretch in degrees.
     pub angle: f32,
@@ -587,7 +587,7 @@ impl Default for StretchSegmentParams {
 }
 
 /// Parameters for spin effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SpinParams {
     /// Revolutions per minute (animated).
     pub rpm: Animated<f32>,
@@ -602,7 +602,7 @@ impl Default for SpinParams {
 }
 
 /// Parameters for swirl effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SwirlParams {
     /// Strength of the swirl warp.
     pub strength: f32,
@@ -623,7 +623,7 @@ impl Default for SwirlParams {
 }
 
 /// Parameters for Colorize effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ColorizeParams {
     /// Tint vector: [hue_degrees, strength, 0.0]
     pub tint: [f32; 3],
@@ -638,7 +638,7 @@ impl Default for ColorizeParams {
 }
 
 /// Parameters for Wipe transition/mask effect.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WipeParams {
     /// Starting progress of the wipe mask (0.0 to 1.0)
     pub start: Animated<f32>,

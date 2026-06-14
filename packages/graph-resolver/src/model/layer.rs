@@ -1,10 +1,11 @@
 //! Layer model types.
 
+use serde::{Serialize, Deserialize};
 use super::animation::Animated;
 use super::effect::Effect;
 
 /// Blend mode for layer compositing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlendMode {
     /// Normal alpha compositing.
     Normal,
@@ -31,7 +32,7 @@ impl Default for BlendMode {
 }
 
 /// Fill type for a shape layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FillType {
     /// No fill / transparent.
     None,
@@ -50,7 +51,7 @@ impl Default for FillType {
 }
 
 /// A gradient stop for gradient fills.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GradientStop {
     /// Position along the gradient (0.0–1.0).
     pub position: f32,
@@ -59,7 +60,7 @@ pub struct GradientStop {
 }
 
 /// A gradient fill specification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Gradient {
     /// Start position (normalised coordinates).
     pub start: [f32; 2],
@@ -70,7 +71,7 @@ pub struct Gradient {
 }
 
 /// Animated transform properties for a layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LayerTransform {
     /// Translation in scene coordinates [x, y, z].
     pub location: Animated<[f32; 3]>,
@@ -83,7 +84,7 @@ pub struct LayerTransform {
 }
 
 /// A visual layer (shape) in the project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Layer {
     /// Unique layer id.
     pub id: u64,
@@ -118,7 +119,7 @@ pub struct Layer {
 }
 
 /// A resolved (evaluated at a specific time) layer with concrete values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedLayer {
     /// Layer id.
     pub id: u64,

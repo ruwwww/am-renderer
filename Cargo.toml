@@ -33,6 +33,7 @@ members = [
     "packages/renderer-core",
     "packages/export-service",
     "packages/preview-service",
+    "packages/integration-tests",
 ]
 
 [profile.release]

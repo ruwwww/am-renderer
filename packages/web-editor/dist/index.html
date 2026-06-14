@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>am-renderer Visual Web Editor</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #111827;
+      color: #f3f4f6;
+      overflow: hidden;
+      height: 100vh;
+    }
+    .app-container {
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 260px;
+      background-color: #1f2937;
+      border-right: 1px solid #374151;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    .sidebar h2 {
+      margin-top: 0;
+      font-size: 1.15rem;
+      color: #9ca3af;
+      border-bottom: 1px solid #374151;
+      padding-bottom: 8px;
+    }
+    .project-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .project-item {
+      padding: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 5px;
+      background-color: #374151;
+      transition: background-color 0.2s;
+    }
+    .project-item:hover {
+      background-color: #4b5563;
+    }
+    .project-item.active {
+      background-color: #2563eb;
+      color: white;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #0f172a;
+    }
+    .canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+      position: relative;
+    }
+    .canvas-wrapper {
+      max-width: 100%;
+      max-height: 100%;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      background-color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-image {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+    }
+    .control-bar {
+      background-color: #1f2937;
+      border-top: 1px solid #374151;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .transport-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn {
+      background-color: #374151;
+      color: #f3f4f6;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn:hover {
+      background-color: #4b5563;
+    }
+    .btn-primary {
+      background-color: #2563eb;
+    }
+    .btn-primary:hover {
+      background-color: #3b82f6;
+    }
+    .timeline-container {
+      height: 250px;
+      background-color: #111827;
+      border-top: 1px solid #374151;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .timeline-header {
+      height: 30px;
+      background-color: #1f2937;
+      border-bottom: 1px solid #374151;
+      position: relative;
+      cursor: ew-resize;
+      user-select: none;
+    }
+    .timeline-ticks {
+      display: flex;
+      height: 100%;
+      position: relative;
+    }
+    .playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background-color: #ef4444;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .playhead-handle {
+      position: absolute;
+      top: -5px;
+      left: -6px;
+      width: 12px;
+      height: 12px;
+      background-color: #ef4444;
+      border-radius: 50%;
+    }
+    .timeline-tracks {
+      flex: 1;
+      overflow-y: auto;
+      position: relative;
+      padding: 10px 0;
+    }
+    .timeline-track {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #1f2937;
+      position: relative;
+    }
+    .track-label {
+      width: 150px;
+      padding-left: 15px;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background-color: #111827;
+      z-index: 2;
+      border-right: 1px solid #1f2937;
+    }
+    .track-lane {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background-color: #030712;
+    }
+    .layer-bar {
+      position: absolute;
+      height: 24px;
+      top: 8px;
+      background-color: #3b82f6;
+      border-radius: 4px;
+      cursor: move;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .layer-bar.selected {
+      background-color: #60a5fa;
+      box-shadow: 0 0 0 2px #fff;
+    }
+    .layer-bar-title {
+      font-size: 0.75rem;
+      padding: 0 8px;
+      color: white;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .drag-handle {
+      width: 6px;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.3);
+      cursor: ew-resize;
+      border-radius: 2px;
+    }
+    .drag-handle:hover {
+      background-color: rgba(255, 255, 255, 0.6);
+    }
+    .inspector {
+      width: 300px;
+      background-color: #1f2937;
+      border-left: 1px solid #374151;
+      padding: 15px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .inspector h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: #9ca3af;
+      border-bottom: 1px solid #374151;
+      padding-bottom: 8px;
+    }
+    .inspector-group {
+      margin-bottom: 15px;
+    }
+    .inspector-label {
+      display: block;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      margin-bottom: 5px;
+    }
+    .inspector-input-row {
+      display: flex;
+      gap: 10px;
+    }
+    .inspector-input-col {
+      flex: 1;
+    }
+    .inspector-input-sublabel {
+      display: block;
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .input {
+      width: 100%;
+      background-color: #374151;
+      border: 1px solid #4b5563;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 0.9rem;
+    }
+    .input:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .slider {
+      width: 100%;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Projects Selector -->
+    <div class="sidebar">
+      <h2>Projects</h2>
+      <ul class="project-list" id="projectList">
+        <!-- Rendered dynamically -->
+      </ul>
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button class="btn" style="flex: 1;" id="btnUndo">Undo</button>
+        <button class="btn" style="flex: 1;" id="btnRedo">Redo</button>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="main-content">
+      <!-- Canvas Area -->
+      <div class="canvas-area" id="canvasArea">
+        <div style="color: #6b7280;" id="canvasPlaceholder">Select a project to start</div>
+      </div>
+
+      <!-- Control Bar -->
+      <div class="control-bar">
+        <div class="transport-controls">
+          <button class="btn btn-primary" id="btnPlay">Play</button>
+          <button class="btn" id="btnStepBack">Step Back</button>
+          <button class="btn" id="btnStepFwd">Step Fwd</button>
+          <span style="margin-left: 10px; font-size: 0.9rem; color: #9ca3af;" id="txtFrameInfo">
+            Frame: 0 / 0 (0.00s)
+          </span>
+        </div>
+        <div>
+          <label style="font-size: 0.85rem; color: #9ca3af; margin-right: 8px;">Scale:</label>
+          <select id="selectScale" style="background-color: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px; padding: 4px;">
+            <option value="0.25">25%</option>
+            <option value="0.5" selected>50%</option>
+            <option value="0.75">75%</option>
+            <option value="1.0">100%</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Timeline Area -->
+      <div class="timeline-container">
+        <div class="timeline-header" id="timelineHeader">
+          <div class="timeline-ticks" id="timelineTicks">
+            <div class="playhead" id="playhead" style="left: 150px; display: none;">
+              <div class="playhead-handle"></div>
+            </div>
+            <div style="width: 150px; height: 100%;"></div>
+            <div style="flex: 1; padding-left: 8px; font-size: 0.75rem; color: #6b7280; display: flex; align-items: center;" id="timelineLabel">
+              Seek Timeline Ruler
+            </div>
+          </div>
+        </div>
+        <div class="timeline-tracks" id="timelineTracks">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector Panel -->
+    <div class="inspector" id="inspectorPanel">
+      <h2>Inspector</h2>
+      <div style="color: #6b7280; font-style: italic;" id="inspectorPlaceholder">
+        Select a layer from the timeline to edit properties.
+      </div>
+      <div id="inspectorContent" style="display: none;">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let projects = [];
+    let activeProjectId = null;
+    let project = null;
+    let selectedLayerId = null;
+    let currentFrame = 0;
+    let isPlaying = false;
+    let frameBlobUrl = null;
+    let scale = 0.5;
+    let ws = null;
+
+    // Drag state variables
+    let dragInfo = null;
+
+    // DOM Elements
+    const projectListEl = document.getElementById('projectList');
+    const canvasAreaEl = document.getElementById('canvasArea');
+    const canvasPlaceholderEl = document.getElementById('canvasPlaceholder');
+    const btnPlayEl = document.getElementById('btnPlay');
+    const btnStepBackEl = document.getElementById('btnStepBack');
+    const btnStepFwdEl = document.getElementById('btnStepFwd');
+    const txtFrameInfoEl = document.getElementById('txtFrameInfo');
+    const selectScaleEl = document.getElementById('selectScale');
+    const timelineHeaderEl = document.getElementById('timelineHeader');
+    const playheadEl = document.getElementById('playhead');
+    const timelineLabelEl = document.getElementById('timelineLabel');
+    const timelineTracksEl = document.getElementById('timelineTracks');
+    const btnUndoEl = document.getElementById('btnUndo');
+    const btnRedoEl = document.getElementById('btnRedo');
+    const inspectorPlaceholderEl = document.getElementById('inspectorPlaceholder');
+    const inspectorContentEl = document.getElementById('inspectorContent');
+
+    // Startup init
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchProjects();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      selectScaleEl.addEventListener('change', (e) => {
+        scale = parseFloat(e.target.value);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'config', scale }));
+        }
+      });
+
+      btnPlayEl.addEventListener('click', () => {
+        if (isPlaying) {
+          pausePlayback();
+        } else {
+          startPlayback();
+        }
+      });
+
+      btnStepBackEl.addEventListener('click', () => seekFrame(currentFrame - 1));
+      btnStepFwdEl.addEventListener('click', () => seekFrame(currentFrame + 1));
+      btnUndoEl.addEventListener('click', triggerUndo);
+      btnRedoEl.addEventListener('click', triggerRedo);
+
+      // Ruler Scrubbing
+      timelineHeaderEl.addEventListener('mousedown', (e) => {
+        handleTimelineScrub(e);
+        const onMouseMove = (moveEvent) => handleTimelineScrub(moveEvent);
+        const onMouseUp = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    async function fetchProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        if (res.ok) {
+          projects = await res.json();
+          renderProjectsList();
+          if (projects.length > 0 && !activeProjectId) {
+            selectProject(projects[0].id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch projects list", e);
+      }
+    }
+
+    function renderProjectsList() {
+      projectListEl.innerHTML = '';
+      projects.forEach(p => {
+        const li = document.createElement('li');
+        li.className = `project-item ${p.id === activeProjectId ? 'active' : ''}`;
+        li.innerHTML = `
+          <div style="font-weight: bold;">${p.title || `Project ${p.id}`}</div>
+          <div style="font-size: 0.8rem; color: #9ca3af; margin-top: 4px;">
+            ${p.width}x${p.height} | ${(p.duration_secs).toFixed(2)}s | ${p.fps} fps
+          </div>
+        `;
+        li.addEventListener('click', () => selectProject(p.id));
+        projectListEl.appendChild(li);
+      });
+    }
+
+    async function selectProject(id) {
+      activeProjectId = id;
+      selectedLayerId = null;
+      currentFrame = 0;
+      isPlaying = false;
+      renderProjectsList();
+      hideInspector();
+      
+      try {
+        const res = await fetch(`/api/projects/${id}`);
+        if (res.ok) {
+          project = await res.json();
+          connectWebSocket();
+          renderTimeline();
+        }
+      } catch (e) {
+        console.error("Failed to load project details", e);
+      }
+    }
+
+    function connectWebSocket() {
+      if (ws) {
+        ws.close();
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        console.log("WS connected to", wsUrl);
+        ws.send(JSON.stringify({ type: 'config', scale }));
+      };
+
+      ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          const view = new DataView(event.data);
+          const frameNum = view.getUint32(0, false);
+          const webpBytes = event.data.slice(4);
+          const blob = new Blob([webpBytes], { type: 'image/webp' });
+          
+          if (frameBlobUrl) {
+            URL.revokeObjectURL(frameBlobUrl);
+          }
+          frameBlobUrl = URL.createObjectURL(blob);
+          currentFrame = frameNum;
+
+          updateCanvasPreview();
+          updateTransportBar();
+          updatePlayheadPosition();
+        }
+      };
+
+      ws.onclose = () => {
+        console.log("WS connection closed");
+      };
+    }
+
+    function updateCanvasPreview() {
+      canvasPlaceholderEl.style.display = 'none';
+      let img = canvasAreaEl.querySelector('.preview-image');
+      if (!img) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'canvas-wrapper';
+        img = document.createElement('img');
+        img.className = 'preview-image';
+        wrapper.appendChild(img);
+        canvasAreaEl.appendChild(wrapper);
+      }
+      img.src = frameBlobUrl;
+      img.style.width = `${project.width * scale}px`;
+    }
+
+    function updateTransportBar() {
+      btnPlayEl.textContent = isPlaying ? 'Pause' : 'Play';
+      const totalFrames = Math.round((project.total_time / 1000.0) * project.fps);
+      const currentSeconds = currentFrame / project.fps;
+      txtFrameInfoEl.textContent = `Frame: ${currentFrame} / ${totalFrames} (${currentSeconds.toFixed(2)}s)`;
+    }
+
+    function updatePlayheadPosition() {
+      if (!project) return;
+      const rect = timelineHeaderEl.getBoundingClientRect();
+      const laneWidth = rect.width - 150;
+      const totalFrames = Math.round((project.total_time / 1000.0) * project.fps);
+      const ratio = currentFrame / (totalFrames - 1 || 1);
+      playheadEl.style.display = 'block';
+      playheadEl.style.left = `${150 + ratio * laneWidth}px`;
+    }
+
+    function handleTimelineScrub(e) {
+      if (!project) return;
+      const rect = timelineHeaderEl.getBoundingClientRect();
+      const laneWidth = rect.width - 150;
+      const relativeX = Math.max(0, Math.min(e.clientX - rect.left - 150, laneWidth));
+      const ratio = relativeX / laneWidth;
+      const totalFrames = Math.round((project.total_time / 1000.0) * project.fps);
+      const targetFrame = Math.round(ratio * (totalFrames - 1));
+      seekFrame(targetFrame);
+    }
+
+    function seekFrame(frame) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const totalFrames = Math.round((project.total_time / 1000.0) * project.fps);
+        const targetFrame = Math.max(0, Math.min(frame, totalFrames - 1));
+        ws.send(JSON.stringify({ type: 'seek', frame: targetFrame }));
+        currentFrame = targetFrame;
+        updateTransportBar();
+        updatePlayheadPosition();
+      }
+    }
+
+    function startPlayback() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'play', fps: project.fps }));
+        isPlaying = true;
+        updateTransportBar();
+      }
+    }
+
+    function pausePlayback() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'pause' }));
+        isPlaying = false;
+        updateTransportBar();
+      }
+    }
+
+    async function triggerUndo() {
+      try {
+        const res = await fetch(`/api/projects/${activeProjectId}/undo`, { method: 'POST' });
+        if (res.ok) {
+          project = await res.json();
+          renderTimeline();
+          if (selectedLayerId) selectLayer(selectedLayerId);
+          seekFrame(currentFrame);
+        }
+      } catch (e) {
+        console.error("Undo request failed", e);
+      }
+    }
+
+    async function triggerRedo() {
+      try {
+        const res = await fetch(`/api/projects/${activeProjectId}/redo`, { method: 'POST' });
+        if (res.ok) {
+          project = await res.json();
+          renderTimeline();
+          if (selectedLayerId) selectLayer(selectedLayerId);
+          seekFrame(currentFrame);
+        }
+      } catch (e) {
+        console.error("Redo request failed", e);
+      }
+    }
+
+    function renderTimeline() {
+      timelineTracksEl.innerHTML = '';
+      if (!project) return;
+
+      timelineLabelEl.textContent = `Seek Timeline (0.00s - ${(project.total_time / 1000.0).toFixed(2)}s)`;
+
+      project.layers.forEach(layer => {
+        const track = document.createElement('div');
+        track.className = 'timeline-track';
+        track.addEventListener('click', (e) => {
+          if (e.target.closest('.layer-bar')) return;
+          selectLayer(layer.id);
+        });
+
+        const label = document.createElement('div');
+        label.className = 'track-label';
+        label.textContent = layer.label || `Layer ${layer.id}`;
+        track.appendChild(label);
+
+        const lane = document.createElement('div');
+        lane.className = 'track-lane';
+        
+        const leftPercent = (layer.start_time / project.total_time) * 100;
+        const widthPercent = ((layer.end_time - layer.start_time) / project.total_time) * 100;
+
+        const bar = document.createElement('div');
+        bar.className = `layer-bar ${layer.id === selectedLayerId ? 'selected' : ''}`;
+        bar.style.left = `${leftPercent}%`;
+        bar.style.width = `${widthPercent}%`;
+        bar.setAttribute('data-id', layer.id);
+
+        bar.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectLayer(layer.id);
+        });
+
+        // Left resize handle
+        const handleStart = document.createElement('div');
+        handleStart.className = 'drag-handle';
+        handleStart.addEventListener('pointerdown', (e) => initLayerDrag(e, layer, 'resize-start'));
+        bar.appendChild(handleStart);
+
+        // Center title
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'layer-bar-title';
+        titleSpan.textContent = layer.label || `Layer ${layer.id}`;
+        bar.appendChild(titleSpan);
+
+        // Right resize handle
+        const handleEnd = document.createElement('div');
+        handleEnd.className = 'drag-handle';
+        handleEnd.addEventListener('pointerdown', (e) => initLayerDrag(e, layer, 'resize-end'));
+        bar.appendChild(handleEnd);
+
+        // Bar pointerdown for dragging whole bar
+        bar.addEventListener('pointerdown', (e) => {
+          if (e.target.classList.contains('drag-handle')) return;
+          initLayerDrag(e, layer, 'move');
+        });
+
+        lane.appendChild(bar);
+        track.appendChild(lane);
+        timelineTracksEl.appendChild(track);
+      });
+    }
+
+    function initLayerDrag(e, layer, actionType) {
+      e.stopPropagation();
+      e.preventDefault();
+      const lane = e.currentTarget.closest('.track-lane');
+      const rect = lane.getBoundingClientRect();
+      
+      dragInfo = {
+        layerId: layer.id,
+        action: actionType,
+        startX: e.clientX,
+        initialStartTime: layer.start_time,
+        initialEndTime: layer.end_time,
+        laneWidth: rect.width,
+      };
+
+      window.addEventListener('pointermove', handleLayerDrag);
+      window.addEventListener('pointerup', endLayerDrag);
+    }
+
+    function handleLayerDrag(e) {
+      if (!dragInfo) return;
+      const deltaX = e.clientX - dragInfo.startX;
+      const deltaTime = (deltaX / dragInfo.laneWidth) * project.total_time;
+
+      const layer = project.layers.find(l => l.id === dragInfo.layerId);
+      if (!layer) return;
+
+      let newStart = layer.start_time;
+      let newEnd = layer.end_time;
+
+      if (dragInfo.action === 'move') {
+        const duration = dragInfo.initialEndTime - dragInfo.initialStartTime;
+        newStart = Math.max(0, Math.min(dragInfo.initialStartTime + deltaTime, project.total_time - duration));
+        newEnd = newStart + duration;
+      } else if (dragInfo.action === 'resize-start') {
+        newStart = Math.max(0, Math.min(dragInfo.initialStartTime + deltaTime, layer.end_time - 100));
+      } else if (dragInfo.action === 'resize-end') {
+        newEnd = Math.max(layer.start_time + 100, Math.min(dragInfo.initialEndTime + deltaTime, project.total_time));
+      }
+
+      layer.start_time = newStart;
+      layer.end_time = newEnd;
+
+      // Local update UI immediately
+      const bar = timelineTracksEl.querySelector(`.layer-bar[data-id="${layer.id}"]`);
+      if (bar) {
+        bar.style.left = `${(newStart / project.total_time) * 100}%`;
+        bar.style.width = `${((newEnd - newStart) / project.total_time) * 100}%`;
+      }
+    }
+
+    async function endLayerDrag() {
+      window.removeEventListener('pointermove', handleLayerDrag);
+      window.removeEventListener('pointerup', endLayerDrag);
+
+      if (!dragInfo) return;
+      const layer = project.layers.find(l => l.id === dragInfo.layerId);
+      
+      if (layer) {
+        if (dragInfo.action === 'move') {
+          await triggerMutation({
+            type: 'update_layer_property',
+            layer_id: dragInfo.layerId,
+            property: 'start_time',
+            value: layer.start_time
+          });
+          await triggerMutation({
+            type: 'update_layer_property',
+            layer_id: dragInfo.layerId,
+            property: 'end_time',
+            value: layer.end_time
+          });
+        } else if (dragInfo.action === 'resize-start') {
+          await triggerMutation({
+            type: 'update_layer_property',
+            layer_id: dragInfo.layerId,
+            property: 'start_time',
+            value: layer.start_time
+          });
+        } else if (dragInfo.action === 'resize-end') {
+          await triggerMutation({
+            type: 'update_layer_property',
+            layer_id: dragInfo.layerId,
+            property: 'end_time',
+            value: layer.end_time
+          });
+        }
+      }
+      dragInfo = null;
+      renderTimeline();
+      seekFrame(currentFrame);
+    }
+
+    function selectLayer(id) {
+      selectedLayerId = id;
+      
+      // Update selected class in timeline
+      const bars = timelineTracksEl.querySelectorAll('.layer-bar');
+      bars.forEach(b => {
+        if (parseInt(b.getAttribute('data-id')) === id) {
+          b.classList.add('selected');
+        } else {
+          b.classList.remove('selected');
+        }
+      });
+
+      renderInspector();
+    }
+
+    function hideInspector() {
+      inspectorPlaceholderEl.style.display = 'block';
+      inspectorContentEl.style.display = 'none';
+    }
+
+    function renderInspector() {
+      const layer = project.layers.find(l => l.id === selectedLayerId);
+      if (!layer) {
+        hideInspector();
+        return;
+      }
+
+      inspectorPlaceholderEl.style.display = 'none';
+      inspectorContentEl.style.display = 'block';
+
+      const locVal = getStaticValue(layer.transform.location, [0, 0, 0]);
+      const scaleVal = getStaticValue(layer.transform.scale, [1, 1]);
+      const rotVal = getStaticValue(layer.transform.rotation, 0);
+      const opVal = getStaticValue(layer.transform.opacity, 1.0);
+
+      inspectorContentEl.innerHTML = `
+        <div style="margin-bottom: 15px; border-bottom: 1px solid #374151; padding-bottom: 10px;">
+          <div style="font-weight: bold;">${layer.label || `Layer ${layer.id}`}</div>
+          <div style="font-size: 0.8rem; color: #9ca3af; marginTop: 4px;">
+            ID: ${layer.id} | Type: ${layer.s || 'unknown'}
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="inspector-group">
+          <span class="inspector-label">Location (X, Y)</span>
+          <div class="inspector-input-row">
+            <div class="inspector-input-col">
+              <input type="number" class="input" id="inpLocX" value="${locVal[0].toFixed(1)}">
+              <span class="inspector-input-sublabel">X</span>
+            </div>
+            <div class="inspector-input-col">
+              <input type="number" class="input" id="inpLocY" value="${locVal[1].toFixed(1)}">
+              <span class="inspector-input-sublabel">Y</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scale -->
+        <div class="inspector-group">
+          <span class="inspector-label">Scale (X, Y)</span>
+          <div class="inspector-input-row">
+            <div class="inspector-input-col">
+              <input type="number" step="0.1" class="input" id="inpScaleX" value="${scaleVal[0].toFixed(2)}">
+              <span class="inspector-input-sublabel">X</span>
+            </div>
+            <div class="inspector-input-col">
+              <input type="number" step="0.1" class="input" id="inpScaleY" value="${scaleVal[1].toFixed(2)}">
+              <span class="inspector-input-sublabel">Y</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rotation -->
+        <div class="inspector-group">
+          <span class="inspector-label">Rotation: <span id="txtRotation">${rotVal.toFixed(1)}</span>°</span>
+          <input type="range" min="0" max="360" class="slider" id="sldRotation" value="${rotVal}">
+        </div>
+
+        <!-- Opacity -->
+        <div class="inspector-group">
+          <span class="inspector-label">Opacity: <span id="txtOpacity">${(opVal * 100).toFixed(0)}</span>%</span>
+          <input type="range" min="0" max="1" step="0.05" class="slider" id="sldOpacity" value="${opVal}">
+        </div>
+      `;
+
+      // Set up Inspector event listeners
+      const inpLocX = document.getElementById('inpLocX');
+      const inpLocY = document.getElementById('inpLocY');
+      const inpScaleX = document.getElementById('inpScaleX');
+      const inpScaleY = document.getElementById('inpScaleY');
+      const sldRotation = document.getElementById('sldRotation');
+      const txtRotation = document.getElementById('txtRotation');
+      const sldOpacity = document.getElementById('sldOpacity');
+      const txtOpacity = document.getElementById('txtOpacity');
+
+      inpLocX.addEventListener('change', () => {
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'location',
+          value: [parseFloat(inpLocX.value) || 0, locVal[1], locVal[2]]
+        });
+      });
+
+      inpLocY.addEventListener('change', () => {
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'location',
+          value: [locVal[0], parseFloat(inpLocY.value) || 0, locVal[2]]
+        });
+      });
+
+      inpScaleX.addEventListener('change', () => {
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'scale',
+          value: [parseFloat(inpScaleX.value) || 1, scaleVal[1]]
+        });
+      });
+
+      inpScaleY.addEventListener('change', () => {
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'scale',
+          value: [scaleVal[0], parseFloat(inpScaleY.value) || 1]
+        });
+      });
+
+      sldRotation.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        txtRotation.textContent = val.toFixed(1);
+      });
+
+      sldRotation.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value);
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'rotation',
+          value: val
+        });
+      });
+
+      sldOpacity.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        txtOpacity.textContent = (val * 100).toFixed(0);
+      });
+
+      sldOpacity.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value);
+        triggerMutation({
+          type: 'update_layer_property',
+          layer_id: selectedLayerId,
+          property: 'opacity',
+          value: val
+        });
+      });
+    }
+
+    function getStaticValue(animatedObj, defaultValue) {
+      if (!animatedObj) return defaultValue;
+      if (animatedObj.Static !== undefined) {
+        return animatedObj.Static;
+      }
+      if (animatedObj.Keyframed !== undefined && animatedObj.Keyframed.length > 0) {
+        return animatedObj.Keyframed[0].value;
+      }
+      return defaultValue;
+    }
+
+    async function triggerMutation(mutation) {
+      try {
+        const res = await fetch(`/api/projects/${activeProjectId}/mutate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mutation)
+        });
+        if (res.ok) {
+          project = await res.json();
+          renderTimeline();
+          seekFrame(currentFrame);
+        }
+      } catch (e) {
+        console.error("Mutation failed", e);
+      }
+    }
+  </script>
+</body>
+</html>

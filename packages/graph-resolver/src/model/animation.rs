@@ -1,9 +1,10 @@
 //! Animation model types — `Animated<T>`, `Keyframe`, easing, and interpolation.
 
+use serde::{Serialize, Deserialize};
 use glam::Vec2;
 
 /// Easing type for keyframe interpolation.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum EasingType {
     /// Linear interpolation (no easing).
     Linear,
@@ -18,7 +19,7 @@ impl Default for EasingType {
 }
 
 /// A single keyframe in an animation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keyframe<T: Clone> {
     /// Normalised time within the layer (0.0 = start, 1.0 = end).
     pub t: f32,
@@ -66,7 +67,7 @@ impl Lerp for Vec2 {
 }
 
 /// An animatable property — either a static value or a list of keyframes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Animated<T: Clone> {
     /// Constant value across all time.
     Static(T),
