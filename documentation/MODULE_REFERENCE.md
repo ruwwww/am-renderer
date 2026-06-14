@@ -1,180 +1,90 @@
-# Module Reference
+# Workspace Module Reference
 
-## `src/lib.rs`
-Library root. Re-exports the five top-level modules: `parser`, `model`, `eval`, `render`, `export`.
+This document maps out the Cargo workspace structure and individual modules across all packages.
 
-## `src/main.rs`
-CLI entry point.
+---
 
-**CLI Commands:**
-- `am-renderer info -i <file>` - Print project metadata
-- `am-renderer render -i <file> -a <assets> -o <output>` - Render frame(s)/video
+## 1. Root Package (`am-renderer`)
 
-## `src/parser/` — XML Deserialization
+- **`Cargo.toml`**: Configures the Cargo workspace containing all packages.
+- **`src/main.rs`**: Main CLI executable entry point. Parsed commands map to `info` or `render`.
+- **`src/config.rs`**: Handles loader configuration for disabling rendering effects.
+- **`src/render/debug_effects.rs`**: Generates side-by-side diagnostic images for isolated effect stacks.
 
-### `mod.rs`
-Module declarations.
+---
 
-### `types.rs` (447 lines)
-Raw XML deserialization types via `#[derive(serde::Deserialize)]`:
-- `XmlScene` — Root element with dimensions, duration, FPS, layers, media, audio
-- `XmlShape`, `XmlTransform` — Layer shape and transform
-- `XmlEffect` — Effect with name map and properties list
-- `XmlProperty` — Property with optional animated value or keyframes
-- `XmlKeyframe` — Individual keyframe with value, easing, time
-- `XmlMedia`, `XmlAudio` — Media references
-- `XmlGradient`, `XmlGradientStop` — Gradient definitions
+## 2. Package `packages/graph-resolver`
+Defines the core evaluation domain structures and Bezier curve interpolation.
 
-All XML attribute mappings use `#[serde(rename = "@attr_name")]`.
+- **`src/model/project.rs`**: Represents the root project, viewport boundaries, audio, and asset maps.
+- **`src/model/layer.rs`**: Represents individual layers, timing bounds, blend modes, and fill options.
+- **`src/model/animation.rs`**: Animated keyframe ease curves with Newton-Raphson solvers for cubic bezier control points.
+- **`src/model/effect.rs`**: Parameter models and parameter-type structures for all visual effects.
+- **`src/eval/timeline.rs`**: Evaluates animation tracks for layers at a given time offset, producing a static `ResolvedScene`.
+- **`src/eval/transform.rs`**: Generates 2D affine matrices for spatial translations, scaling, and rotation.
 
-### `xml.rs` (272 lines)
-- `parse_xml(path: &Path) -> Result<XmlScene>` — Reads and deserializes an XML file
-- 4 unit tests covering: minimal scene, full scene, static transform children, multi-layer with audio/media
+---
 
-### `converter.rs` (629 lines)
-XML-to-domain-model converter:
-- `convert_project(xml) -> Result<Project>` - Converts raw XML types to domain model
-- `convert_effect(xml_effect) -> Effect` - Maps 25+ XML effect IDs to `EffectType` variants
-- `build_virtual_mappings()` - Auto-pairs media URIs to asset files via round-robin
+## 3. Package `packages/alight-parser`
+Translates serialized Alight Motion XML structure to domain models.
 
-## `src/model/` — Domain Model
+- **`src/parser.rs`**: Handles low-level reading of the Alight XML hierarchy.
+- **`src/types.rs`**: Direct XML mapping deserializers using `serde`.
+- **`src/converter.rs`**: Bridges the gap from XML schemas to internal models. Implements the coordinate system scale converter (`coord_scale = 2.0`) and asset-name auto-pairing.
 
-### `mod.rs`
-Module declarations.
+---
 
-### `project.rs` (74 lines)
-- `Project` — Title, dimensions, background color, duration, FPS, media refs, audio tracks, layers
-- `Project::duration_secs()` — Duration in seconds
-- `Project::total_frames()` — Total frame count
-- `MediaRef` — Media item with ID, filename, virtual URI
-- `AudioTrack` — Audio clip with source, timing, volume
+## 4. Package `packages/renderer-core`
+Handles pixel processing, composite math, and layer rendering.
 
-### `layer.rs` (153 lines)
-- `Layer` — Source layer with ID, name, timing, visibility, transform, fill type, effects
-- `ResolvedLayer` — Evaluated layer with concrete (non-animated) values
-- `LayerTransform` — Anchor, position, scale, rotation, opacity (all `Animated<f32>`)
-- `BlendMode` — Enum: Normal, Multiply, Screen, Overlay, Darken, Lighten, Subtract, Add
-- `FillType` — Enum: None, Media(String), Color([f32;4]), Gradient(Gradient)
-- `Gradient`, `GradientStop` — Linear gradient with stops
+- **`src/compositor/mod.rs`**: Orchestrates pixel buffers, handles transparent layout clipping, and sequences layer evaluation.
+- **`src/compositor/cache.rs`**: Thread-safe source image and video frame decoding cache.
+- **`src/compositor/shape.rs`**: Rasterizes solid fills, gradient maps, and circular shape boundaries.
+- **`src/compositor/gradient.rs`**: Renders multi-stop linear color gradients.
+- **`src/compositor/utils.rs`**: Conversions for hex color hashes to RGBA float vectors.
+- **`src/blending.rs`**: Implements 8 Porter-Duff pixel blend mode formulas (Multiply, Screen, Overlay, etc.).
+- **`src/debug_layout.rs`**: Draws bounding contours, pivot coordinates, and diagnostic labeling.
+- **`src/effects/mod.rs`**: Main sequencer/dispatcher calling pixel effects.
+- **`src/effects/transform.rs`**: Modulates layer matrix offsets before sampling (Oscillate, Swing, RandomDisplace, Spin).
+- **`src/effects/`**:
+  - `exposure.rs`, `brightness_contrast.rs`, `hsl.rs`, `color_tint.rs`, `colorize.rs`, `vignette.rs` (Color Adjustments)
+  - `tile.rs`, `offset.rs`, `stretch_segment.rs`, `swirl.rs`, `wipe.rs` (Coordinates Modifiers)
+  - `gaussian_blur.rs`, `lens_blur.rs`, `sharpen.rs` (Convolutions)
+  - `find_edges.rs` (Sobel Edges)
+  - `lift.rs` (Shadows & Copy Background)
+  - `luma_key.rs` (Transparency keying)
 
-### `animation.rs` (152 lines)
-Core animation system:
-- `Animated<T>` — Enum: `Static(T)` or `Keyframed(Vec<Keyframe<T>>)`
-- `Keyframe<T>` — Value, easing type, time (normalized 0-1)
-- `EasingType` — `Linear` or `CubicBezier(f32, f32, f32, f32)`
-- `Lerp` trait — Implemented for `f32`, `[f32;2]`, `[f32;3]`, `[f32;4]`
-- `Animated::evaluate(normalized_time)` — Interpolates between keyframes with cubic bezier easing (Newton-Raphson solver)
+---
 
-### `effect.rs` (538 lines)
-- `Effect` — Type tag and parameter struct
-- `EffectType` — Enum with 25+ variants (see EFFECTS_CATALOG.md)
-- Each effect has a dedicated parameter struct (e.g., `OscillateParams`, `MotionBlurParams`, `GaussianBlurParams`)
+## 5. Package `packages/export-service`
+Manages parallel batch exporting.
 
-## `src/eval/` — Timeline Evaluation
+- **`src/png.rs`**: Exports sequences of images concurrently using a multi-threaded `rayon` bridge.
+- **`src/video.rs`**: Pipelines audio tracks, loads caches, and invokes `ffmpeg` to compile sequences into an H.264 MP4.
 
-### `mod.rs`
-Module declarations.
+---
 
-### `timeline.rs` (115 lines)
-- `evaluate(project, time_secs) -> ResolvedScene` — Main evaluation function
-  - Filters visible layers within time range
-  - Computes normalized time per layer
-  - Evaluates all animated properties
-  - Applies fade effects to opacity (delegates to `render/effects/fade.rs`)
+## 6. Package `packages/preview-service`
+Provides the collaborative API and real-time preview daemon.
 
-### `transform.rs` (102 lines)
-- `build_transform_matrix(transform) -> Mat3` — Builds 3x3 affine matrix (translate * rotate * scale) with anchor-point correction
-- `invert_transform(transform) -> Mat3` — Inverts the affine matrix
-- `transform_point(mat, point) -> Vec2` — Matrix * vector multiplication
+- **`src/main.rs`**: Starts the Axum web daemon, routes API commands, registers WebSocket paths, and loads SQLite databases.
+- **`src/db.rs`**: SQLite ORM queries and database table migration definitions.
+- **`src/mutations.rs`**: Handles transactional mutations (create, update, delete layers, undo, redo actions).
+- **`src/scheduler.rs`**: Animates, renders, WebP-compresses, and streams frames down WebSocket clients.
 
-Transform-modifying effects (Oscillate, Swing, RandomDisplace) were moved to `render/effects/transform.rs`.
+---
 
-## `src/render/` — Software Rendering Pipeline
+## 7. Package `packages/web-editor`
+React frontend editing canvas application.
 
-### `mod.rs`
-Module declarations.
+- **`src/App.tsx`**: Main component staging layout, tracks timeline position, and shows action triggers.
+- **`src/components/CanvasViewer.tsx`**: Visualizes WebSocket WebP streams in real-time.
+- **`src/components/Timeline.tsx`**: Renders layer timing boundaries, zoom control, and selection tools.
+- **`src/components/PropertyPanel.tsx`**: Visual controls for updating scale, coordinate values, and active effects.
 
-### `compositor/` submodule directory
-Modularized rendering engine:
-- `mod.rs` — Core compositing loop and layer processing orchestration:
-  - `render_scene(...)` — Creates canvas, fills background, composites layers bottom-to-top, and handles adaptive viewport calculations for debug layout mode.
-  - `render_layer(...)` — Renders a single layer onto the canvas using inverse-transform sampling per pixel (parallelized using `rayon`'s `into_par_iter()`).
-  - `create_layer_source(...)` — Creates the source image buffer for a layer based on its fill type, applying Lift (Copy Background) and chaining pixel-space effects.
-- `cache.rs` — Image caching and loading logic:
-  - `ImageCache` — Virtual URI to physical file path mapping and thread-safe loading cache.
-- `shape.rs` — Geometry and basic shape source generation:
-  - `create_base_shape_source(...)` — Renders a base shape filled with color, gradient, or media, and handles geometry clipping (like `.circle` masking).
-- `gradient.rs` — Linear gradient rendering:
-  - `render_gradient(...)` — Renders linear gradients using color stop interpolation.
-- `utils.rs` — Color conversion and parsing:
-  - `parse_hex_color(...)` — Parses hex color strings in `#AARRGGBB` or `#RRGGBB` formats into `[f32; 4]`.
-  - `to_rgba_u8(...)` — Utility for converting `[f32; 4]` colors to `image::Rgba<u8>`.
+---
 
-### `debug_layout.rs` (234 lines)
-Debug layout visualization utilities:
-- `draw_layer_debug_outline` - Draws bounding box outline, pivot crosshairs, and layer metadata label
-- `draw_line`, `draw_rect` - Custom line and rectangle rasterization
-- `draw_text`, `draw_text_with_bg`, `draw_char` - Custom pixel font rasterization (using embedded bitmasks)
+## 8. Package `packages/integration-tests`
+Houses E2E workload integration validation tests.
 
-### `blending.rs` (95 lines)
-- `blend_pixel(base, overlay, mode) -> Rgba` — Implements 8 blend modes using Porter-Duff "over" compositing
-
-### `effects/`
-#### `mod.rs` — Centralized pixel effect dispatcher
-- `apply_pixel_effects(effects, img, layer) -> RgbaImage` — Dispatches all pixel-processing effects in order via a single match, evaluating animated parameters using the layer's normalized time
-- Also re-exports `apply_transform_effects` from `transform.rs`
-
-#### Per-effect modules (one file each):
-- `exposure.rs` — Exposure adjustment in EV stops
-- `brightness_contrast.rs` — Brightness/contrast with contrast pivot
-- `hsl.rs` — Full HSL adjustment (hue shift, saturation, lightness) with `rgb_to_hsl`/`hsl_to_rgb` helpers
-- `color_tint.rs` — Color fill with alpha blending
-- `vignette.rs` — Radial darkening at frame edges with punchout mode
-- `find_edges.rs` — Sobel edge detection via parallel channel decomposition
-- `highlight_shadow.rs` — Stub (not yet implemented)
-- `gradient_overlay.rs` — Stub (not yet implemented)
-- `luma_key.rs` — Stub (not yet implemented)
-- `tile.rs` — Repeating/mirror tiling with brick stagger and per-tile rotation
-- `offset.rs` — Scroll/shift UV with wrapping, plus `sample_wrapped`/`sample_clamped` helpers
-- `stretch_segment.rs` — Split frame and stretch a contiguous segment
-- `gaussian_blur.rs` — Separable 2-pass Gaussian blur with kernel builder; also exports `box_blur`
-- `lens_blur.rs` — Stub (not yet implemented)
-- `sharpen.rs` — Stub (not yet implemented)
-- `lift.rs` — Copy Background: samples the composition canvas via forward transform with affine stepping, blends with optional shape fill
-- `transform.rs` — Transform-modifying effects: Oscillate (sinusoidal displacement), Swing (pendulum rotation), RandomDisplace (deterministic noise displacement); moved from `eval/effects.rs`
-- `fade.rs` — Linear opacity fade at layer boundaries; called from `eval/timeline.rs`
-- `blink.rs` — Stub (periodic visibility)
-- `motion_blur.rs` — Stub (temporal supersampling)
-- `gaussian_blur.rs` — Separable 2-pass Gaussian and box blur (originally `blur.rs`)
-- `color.rs` — **Deleted**: split into individual modules above
-- `blur.rs` — **Renamed**: to `gaussian_blur.rs`
-- `uv.rs` — **Deleted**: split into individual modules above
-
-## `src/export/` — Output Formats
-
-### `mod.rs`
-Module declarations.
-
-### `png.rs` (81 lines)
-- `export_frame(path, img)` — Save single RGBA image as PNG
-- `export_sequence(project, cache, output_dir)` — Render all frames in parallel using rayon:
-  1. Pre-load all media assets into cache
-  2. Par-iterate frames from 0 to total_frames
-  3. Call `render_scene` then `export_frame` per frame
-
-### `video.rs` (49 lines)
-- `export_mp4(frame_dir, output_path, fps)` — Shells out to ffmpeg:
-  - Reads `frame_%06d.png` from frame directory
-  - Encodes H.264 with yuv420p pixel format
-  - Requires ffmpeg to be installed and on PATH
-
-## Examples
-
-### `examples/analyze_presets.rs`
-Reads all XML files from a presets directory and prints shape properties found in each.
-
-### `examples/auto_pair.rs`
-Scans a source directory for image files and copies/renames them to match the virtual URIs expected by an XML project file.
-
-### `examples/test_sizing.rs`
-Loads images from the assets directory and prints their dimensions.
+- **`tests/`**: Contains E2E tests validating REST APIs, WebSocket frames, undo/redo states, database transactions, and memory leaks.

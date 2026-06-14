@@ -2,63 +2,86 @@
 
 ## Overview
 
-`am-renderer` is a headless CPU-based renderer for Alight Motion XML projects. It parses `.xml` project files exported from Alight Motion, evaluates animated properties at arbitrary timestamps, and renders frames as PNG sequences or MP4 video.
-
-## Pipeline
+`am-renderer` is modularized as a multi-package Rust workspace + React frontend, separating core scene parsing, evaluation, pixel composition, network preview services, and interactive editing UI.
 
 ```
-XML file  --[parser]--> XmlScene (raw serde types)
-                             |
-                    [parser::converter::convert_project]
-                             |
-              Project (domain model with Animated<T>)
-                             |
-              [eval::timeline::evaluate(time_secs)]
-                             |
-              ResolvedScene (concrete values at t)
-                             |
-              [render::compositor::render_scene()]
-                             |
-              RgbaImage (rendered frame)
-                             |
-              [export::png or export::video]
-                             |
-              PNG Sequence or MP4
+                  ┌─────────────────────────────────────────┐
+                  │          Alight Motion XML              │
+                  └────────────────────┬────────────────────┘
+                                       │
+                                       ▼ [alight-parser]
+                  ┌─────────────────────────────────────────┐
+                  │       Domain model (Project, Layer)     │
+                  └────────────────────┬────────────────────┘
+                                       │
+                                       ▼ [graph-resolver]
+                  ┌─────────────────────────────────────────┐
+                  │     ResolvedScene (Time-evaluated)      │
+                  └────────────────────┬────────────────────┘
+                                       │
+                                       ▼ [renderer-core]
+                  ┌─────────────────────────────────────────┐
+                  │            RgbaImage Canvas             │
+                  └──────────┬───────────────────┬──────────┘
+                             │                   │
+      [export-service]       ▼                   ▼ [preview-service]
+                  ┌─────────────────┐     ┌─────────────────┐
+                  │ PNG / MP4 Files │     │ WebP WS Stream  │
+                  └─────────────────┘     └────────┬────────┘
+                                                   │
+                                                   ▼ [web-editor]
+                                          ┌─────────────────┐
+                                          │ React Front-end │
+                                          └─────────────────┘
 ```
 
-## Core Principle
+## Workspace Crate Breakdown
 
-`evaluate(time)` is stateless and deterministic. Given the same `Project` and time, it always produces the same `ResolvedScene`. No frame-to-frame hidden state, no temporal caches. This means motion blur, blink, and other temporal effects must be implemented via explicit multi-sample evaluation at the render level, not via state accumulation.
+1. **`graph-resolver`**: Holds the core scene evaluation logic and animatable data structures.
+   - Defines `Project`, `Layer`, `Effect`, and `Animated<T>`.
+   - `evaluate(time_secs) -> ResolvedScene` is stateless, deterministic, and free of side effects.
+2. **`alight-parser`**: Converts raw deserialized XML scene models to `graph-resolver` domain models.
+   - Applies the fixed coordinate scaling factor `coord_scale = 2.0` (logical points to canvas pixels).
+3. **`renderer-core`**: High-performance CPU-based renderer using software rasterization.
+   - Composites layers bottom-to-top using Porter-Duff blend modes.
+   - Computes sub-pixel transforms via inverse-transform mapping.
+   - Implements per-pixel and full-image separable visual effects.
+4. **`export-service`**: Implements offline rendering pipelines.
+   - Exports frames as individual PNG files in parallel using `rayon`.
+   - Encodes PNG sequences to H.264 MP4 videos using `ffmpeg` sub-processes.
+5. **`preview-service`**: A stateful Axum API server and WebSocket preview provider.
+   - Keeps track of projects, layers, and properties inside an SQLite database (`db.sqlite`).
+   - Implements transactional API routes for live mutation (e.g. updating position, opacity, effects).
+   - Manages memory-based undo/redo transaction stacks.
+   - Employs a stateful frame streamer (`PlaybackScheduler`) that evaluates, renders, WebP-compresses, and broadcasts frames to active WebSocket connections in real-time.
+6. **`web-editor`**: An interactive React + Vite frontend timeline editor.
+   - Connects to the `preview-service` WebSocket endpoint for frame stream rendering.
+   - Calls REST endpoints to perform live layer/property updates, undo, and redo.
 
-## Layer Model
+## Frame Stream Rendering & Playback Scheduler
 
-Each layer in the XML is converted to a `Layer` struct containing:
-- An animated `LayerTransform` (anchor, position, scale, rotation, opacity)
-- A `FillType` (None, Media, Color, or Gradient)
-- A list of `Effect` instances
-- Timing metadata (start time, duration, visibility)
+The `PlaybackScheduler` in `packages/preview-service/src/scheduler.rs` governs real-time playback:
+- Uses a background worker thread with a tick rate matching the project FPS.
+- On each tick, if playing, it updates the virtual timeline time, evaluates the project scene via `graph-resolver`, renders the frame via `renderer-core`, compresses it to WebP format, and sends the raw binary frame over a broadcast channel.
+- Handles pause, play, seek, and FPS configuration commands.
+- Clamps FPS to `[0.1, 240.0]` to avoid zero or negative delta time stepping panics.
+- Aborts active rendering tasks when playback pauses or WebSocket clients disconnect.
 
-During evaluation, all animated properties are resolved to concrete values at the given timestamp. The resolved layer is then rendered bottom-to-top using inverse-transform sampling with per-pixel blend modes.
+## Effect Pipeline Flow
 
-## Effect Classification
+Effects are classified by their execution phase in `packages/renderer-core/src/render/effects`:
 
-Effects are classified into categories based on where they apply in the rendering pipeline:
+1. **Transform Modifiers** (`transform.rs`): Applied to the affine transformation matrix *before* inverse sampling (e.g., Oscillate, Swing, RandomDisplace).
+2. **UV Effects** (`tile.rs`, `offset.rs`, `stretch_segment.rs`, `swirl.rs`, `wipe.rs`): Alter coordinates during pixel sampling.
+3. **Color/Pixel Effects** (`exposure.rs`, `brightness_contrast.rs`, `hsl.rs`, `color_tint.rs`, `vignette.rs`, `find_edges.rs`, `lift.rs`, `colorize.rs`): Modify pixel values post-sampling.
+4. **Blur/Convolution Effects** (`gaussian_blur.rs`, `lens_blur.rs`, `sharpen.rs`): Run 2-pass horizontal/vertical convolution filters on the overall rendered layer canvas.
+5. **Keying** (`luma_key.rs`): Controls layer transparency based on pixel luminance.
 
-1. **Transform Modifiers** (`render/effects/transform.rs`) - Modify the layer's transform matrix before rendering: Oscillate, Swing, RandomDisplace
-2. **Temporal Effects** (`render/effects/{fade,blink,motion_blur}.rs`) - Affect visibility/opacity over time: MotionBlur, Blink, Fade
-3. **UV Effects** (`render/effects/{tile,offset,stretch_segment}.rs`) - Modify sampling coordinates: Tile, Offset, StretchSegment
-4. **Color Effects** (`render/effects/{exposure,brightness_contrast,hsl,color_tint,vignette,sharpen,find_edges,highlight_shadow,gradient_overlay}.rs`) - Modify pixel colors post-sampling: Exposure, BrightnessContrast, HSL, ColorTint, Vignette, Sharpen, FindEdges, HighlightShadow, GradientOverlay
-5. **Blur Effects** (`render/effects/{gaussian_blur,lens_blur}.rs`) - Full-image convolution: GaussianBlur, LensBlur
-6. **Keying** (`render/effects/luma_key.rs`) - Alpha manipulation: LumaKey
-7. **Lift (Copy Background)** (`render/effects/lift.rs`) - Background sampling with shape blend: Lift
+All pixel effects are dispatched in serial sequence via `apply_pixel_effects` in `packages/renderer-core/src/effects/mod.rs`.
 
-All pixel effects are dispatched through a single centralized function `render/effects/mod.rs::apply_pixel_effects()`.
+## Key Design Principles
 
-## Key Design Decisions
-
-- **No GPU**: Entirely CPU-based software rasterization using the `image` crate
-- **Inverse-transform sampling**: For each output pixel, compute the inverse transform to find the source pixel, enabling correct sub-pixel transforms
-- **Porter-Duff "over" compositing**: Layers are composited bottom-to-top with alpha-aware blending
-- **Separable blurs**: Gaussian and box blur implemented as two-pass (horizontal + vertical) for O(n) performance
-- **Newton's method for cubic bezier**: Keyframe easing uses Newton-Raphson to solve for t given x, with fallback to bisection
-- **Deterministic noise**: RandomDisplace uses a hash-based deterministic noise function so frames are reproducible
+- **Deterministic Evaluation**: Given the same project definition and time offset, `evaluate` always produces the exact same resolved properties. 
+- **Atomic Database Updates**: All layer updates in `preview-service` are wrapped in SQLite database transactions to preserve history integrity.
+- **Rayon Parallelism**: Multi-threaded row-based render loops speed up pixel-processing effects, and multi-threaded frame loops parallelize offline exporting.
+- **WebP WebSocket Transport**: Using raw binary WebP-encoded buffers drastically decreases networking overhead during active browser previews.
