@@ -1,3 +1,5 @@
 /target
 /output_frames
 /.temp_frames
+.agents
+*.sqlite
